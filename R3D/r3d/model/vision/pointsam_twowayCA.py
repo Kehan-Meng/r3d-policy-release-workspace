@@ -309,7 +309,10 @@ class PointSAMTwoWayCA(nn.Module):
             if not requested_bpe.is_file():
                 requested_bpe = packaged_bpe
             cfg.model.text_prompt_encoder.bpe_path = str(requested_bpe.resolve())
-            OmegaConf.resolve(cfg)
+            # The policy bridge only instantiates the model subtree. Resolving
+            # the full training config would unnecessarily require dataset-only
+            # environment variables such as AFFOGATO_DATA_ROOT during inference.
+            OmegaConf.resolve(cfg.model)
 
         # ---- Instantiate the full PointCloudSAM model ----
         self.model: nn.Module = hydra.utils.instantiate(cfg.model)
