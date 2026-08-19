@@ -1,0 +1,103 @@
+config_version: 1
+name: metaworld_corner2_true_camera_v1
+benchmark: metaworld
+task: "*"
+canonical_frame: corner2_cv_camera
+require_metadata: true
+status: supported_static_legacy_dataset_profile
+semantic_alignment: true
+data_operation:
+  type: coordinate_reexpression
+  point_selection_preserved: true
+  rerendered_from_depth: false
+provenance:
+  generator: third_party/Metaworld/gen_demonstration_expert.py
+  point_cloud_generator: R3D/r3d/gym_util/mujoco_point_cloud.py
+  wrapper: R3D/r3d/env/metaworld/metaworld_wrapper.py
+  rendered_camera_name: corner2
+  rendered_camera_id: 2
+  historical_extrinsic_lookup_camera_name: topview
+  historical_extrinsic_lookup_camera_id: 0
+  camera_position_world_m: [0.6, 0.295, 0.8]
+  fixed_across_audited_tasks: true
+  audited_tasks: [basketball, bin-picking, box-close, coffee-pull, coffee-push, dial-turn, door-lock, handle-pull, handle-pull-side, lever-pull]
+native_contract:
+  point_cloud_dim: 6
+  state_dim: 9
+  action_dim: 4
+  point_cloud_frame: metaworld_obs_aligned
+  state_semantics: eef_right_finger_left_finger_world_positions9
+  action_semantics: preclip_xyz_command_world_plus_gripper4
+  action_clip_in_environment: [-1.0, 1.0]
+  action_scale_after_clipping_m: 0.01
+transforms:
+  - name: corner2_cv_camera_from_legacy_obs_aligned
+    source_frame: metaworld_obs_aligned
+    target_frame: corner2_cv_camera
+    provider:
+      type: static
+      length_unit: meter
+      matrix:
+        - [0.992546151641322, 0.10699920873630572, 0.05833786242061189, 0.0]
+        - [0.0, -0.47869185794060687, 0.8779829754279805, 0.0]
+        - [0.12186934340514748, -0.8714386234676395, -0.4751237614209837, 0.0]
+        - [0.0, 0.0, 0.0, 1.0]
+  - name: corner2_cv_camera_from_world
+    source_frame: world
+    target_frame: corner2_cv_camera
+    provider:
+      type: static
+      length_unit: meter
+      matrix:
+        - [-0.5499013297225575, -0.8331827568227448, 0.05843818360125747, 0.5289791642152382]
+        - [-0.376207740619243, 0.3095491421700133, 0.8732966646449382, -0.5642296842845587]
+        - [-0.7457052121767205, 0.45824210011200417, -0.4836712873609643, 0.6991787376617625]
+        - [0.0, 0.0, 0.0, 1.0]
+schemas:
+  observation:
+    name: metaworld_true_camera_observation
+    tensors:
+      - name: point_cloud
+        key_path: point_cloud
+        expected_last_dim: 6
+        fields:
+          - {name: xyz, slice: [0, 3], kind: point, source_frame: metaworld_obs_aligned, target_frame: corner2_cv_camera, units: meter}
+          - {name: rgb, slice: [3, 6], kind: passthrough}
+      - name: agent_pos
+        key_path: agent_pos
+        expected_last_dim: 9
+        fields:
+          - {name: eef, slice: [0, 3], kind: point, source_frame: world, target_frame: corner2_cv_camera, units: meter}
+          - {name: right_finger, slice: [3, 6], kind: point, source_frame: world, target_frame: corner2_cv_camera, units: meter}
+          - {name: left_finger, slice: [6, 9], kind: point, source_frame: world, target_frame: corner2_cv_camera, units: meter}
+  action:
+    name: metaworld_true_camera_action
+    tensors:
+      - name: action
+        key_path: ""
+        expected_last_dim: 4
+        fields:
+          - {name: translation_command, slice: [0, 3], kind: vector, source_frame: world, target_frame: corner2_cv_camera, units: dimensionless}
+          - {name: gripper, slice: [3, 4], kind: scalar}
+  training:
+    name: metaworld_true_camera_training
+    tensors:
+      - name: point_cloud
+        key_path: point_cloud
+        expected_last_dim: 6
+        fields:
+          - {name: xyz, slice: [0, 3], kind: point, source_frame: metaworld_obs_aligned, target_frame: corner2_cv_camera, units: meter}
+          - {name: rgb, slice: [3, 6], kind: passthrough}
+      - name: agent_pos
+        key_path: agent_pos
+        expected_last_dim: 9
+        fields:
+          - {name: eef, slice: [0, 3], kind: point, source_frame: world, target_frame: corner2_cv_camera, units: meter}
+          - {name: right_finger, slice: [3, 6], kind: point, source_frame: world, target_frame: corner2_cv_camera, units: meter}
+          - {name: left_finger, slice: [6, 9], kind: point, source_frame: world, target_frame: corner2_cv_camera, units: meter}
+      - name: action
+        key_path: action
+        expected_last_dim: 4
+        fields:
+          - {name: translation_command, slice: [0, 3], kind: vector, source_frame: world, target_frame: corner2_cv_camera, units: dimensionless}
+          - {name: gripper, slice: [3, 4], kind: scalar}

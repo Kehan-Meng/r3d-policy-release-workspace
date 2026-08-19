@@ -1,0 +1,64 @@
+# Uni3D/OpenCLIP 256 维投影 + 双向交叉注意力 + token similarity decoder。
+
+_target_: pc_sam.model.core.text_guided_heatmap.PointCloudSAM
+return_patch_heatmap: false
+return_contrastive_features: false
+# ViT/CLIP 的 1024 维输出均由模态专属 Linear 投影到 256 维。
+contrastive_dim: 256
+
+pc_encoder:
+  #===wzy===
+  # Constructor args for Uni3DPointEncoderForSAM only.
+  _target_: pc_sam.model.encoder.point_encoder.Uni3DPointEncoderForSAM
+
+  # Uni3D ViT backbone.
+  pc_model: eva02_tiny_patch14_224
+  pc_feat_dim: 192
+  pretrained_pc: ""
+  drop_path_rate: 0.0
+
+  # Point grouping and local point encoder.
+  embed_dim: 1024
+  num_group: 512
+  group_size: 64
+  pc_encoder_dim: 512
+  patch_dropout: 0.0
+
+  # E-SAM adapters attached to every Uni3D ViT block.
+  use_esam_adapter: true
+  esam_adapter_mlp_ratio: 0.25
+  esam_adapter_scale: 0.5
+  #===wzy===
+
+mask_decoder:
+  _target_: pc_sam.model.decoder.token_similarity_heatmap_decoder.TokenSimilarityHeatmapDecoder
+  pc_input_dim: 256
+  text_input_dim: 256
+  transformer_depth: 2
+  transformer_num_heads: 8
+  transformer_mlp_dim: 2048
+  attention_downsample_rate: 2
+  normalize: true
+  temperature: 0.07
+  interp_k: 3
+
+text_prompt_encoder:
+  #===wzy===
+  _target_: pc_sam.model.encoder.text_encoder.OpenCLIPTokenTextEncoder
+  #===wzy===
+  model_name: EVA02-E-14-plus
+  pretrained: ${oc.env:POINTSAM_CLIP_CHECKPOINT,""}
+  context_length: 77
+  freeze_clip: true
+  drop_special_tokens: true
+  drop_visual: true
+  open_clip_python_path: ""
+  text_only: true
+  precision: fp32
+  bpe_path: ${oc.env:POINTSAM_BPE_PATH,""}
+  apply_text_projection: true
+  # Cache deterministic outputs of the frozen OpenCLIP tower on CPU. Each DDP
+  # rank owns a bounded LRU; 20k frequent prompts cover about 80% of train queries.
+  cache_frozen_features: true
+  cache_max_entries: 20000
+  cache_dtype: bfloat16

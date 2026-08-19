@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+
+# Environments and editors
+.env
+.venv/
+.vscode/
+.idea/
+
+# Runtime outputs
+checkpoints/
+pretrained/
+runs/
+logs/
+wandb/
+outputs/
+videos/
+*.log
+
+# Model and dataset artifacts
+*.ckpt
+*.pt
+*.pth
+*.safetensors
+*.zarr/
+*.h5
+*.hdf5
+*.npz
+*.npy
+
+# Local experiment results are ignored by default. Curated text/JSON/CSV
+# summaries can be force-added deliberately when the release is prepared.
+experiments/results/*
+!experiments/results/.gitkeep
+
+# OS files
+.DS_Store
+Thumbs.db
+

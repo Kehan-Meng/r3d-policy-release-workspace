@@ -1,0 +1,238 @@
+defaults:
+  - task: metaworld_coffee-push
+  - _self_
+
+name: train_r3d_metaworld_pointsam_heatmap_bridge
+
+task_name: ${task.name}
+shape_meta: ${task.shape_meta}
+exp_name: "r3d_metaworld_pointsam_heatmap_bridge"
+setting: null
+
+horizon: 16
+n_obs_steps: 2
+n_action_steps: 8
+n_latency_steps: 0
+dataset_obs_steps: ${n_obs_steps}
+keypoint_visible_rate: 1.0
+obs_as_global_cond: True
+
+policy:
+  _target_: r3d.policy.dp3.DP3
+  use_point_crop: true
+  condition_type: one_way_transformer
+  use_down_condition: true
+  use_mid_condition: true
+  use_up_condition: true
+
+  diffusion_step_embed_dim: 128
+  down_dims:
+  - 512
+  - 1024
+  - 2048
+  crop_shape:
+  - 80
+  - 80
+  encoder_output_dim: 256
+  horizon: ${horizon}
+  kernel_size: 5
+  n_action_steps: ${n_action_steps}
+  n_groups: 8
+  n_obs_steps: ${n_obs_steps}
+
+  transformer_config:
+    depth: 4
+    embedding_dim: 256
+    num_heads: 8
+    mlp_dim: 2048
+
+  use_act: true
+  act_config:
+    num_queries: 16
+    num_heads: 8
+    heatmap_mode: log_bias
+    log_bias_lambda: 1.0
+    dropout: 0.0
+    ffn_ratio: 4.0
+    use_pc_pe_in_input: true
+    pe_scale_init: 1.0
+    use_pseudo_heatmap: false
+    pseudo_text_pool: cls
+    pseudo_heatmap_normalize: minmax
+    # PointSAMHeatmapBridge returns 512 patch tokens without an extra CLS token.
+    drop_cls_token: false
+
+  noise_scheduler:
+    _target_: diffusers.schedulers.scheduling_ddim.DDIMScheduler
+    num_train_timesteps: 100
+    beta_start: 0.0001
+    beta_end: 0.02
+    beta_schedule: squaredcos_cap_v2
+    clip_sample: True
+    set_alpha_to_one: True
+    steps_offset: 0
+    prediction_type: sample
+
+  generation_type: diffusion
+  flow_matching:
+    eps: 1.0e-2
+    delta: 1.0e-2
+    num_segments: 2
+    boundary: 1
+    alpha: 1.0e-5
+    stop_gradient_target: true
+    direct_velocity_weight: 0.0
+    num_inference_steps: 1
+
+  num_inference_steps: 10
+  obs_as_global_cond: true
+  shape_meta: ${shape_meta}
+
+  use_pc_color: true
+  pointnet_type: "pointsam_heatmap_bridge"
+  use_cached_encoder_features: false
+
+  use_text: true
+  use_text_for_global_cond: false
+  text_json_path: R3D/data/text.json
+  task_name: ${task_name}
+  clip_model_name: openai/clip-vit-base-patch32
+  text_feat_dim: 64
+  freeze_clip: true
+  strict_text_lookup: false
+
+  # ACTTextAlignHead — training-only auxiliary supervision (optional).
+  use_act_text_align: false
+  act_text_align_config:
+    lambda_max: 0.0
+    warmup_steps: 1000
+    mask_ratio: 0.3
+    num_heads: 8
+    mlp_ratio: 4.0
+
+  # ── PointSAMHeatmapBridge 专属参数 ──
+  pointcloud_encoder_cfg:
+    # ── 路径 ──
+    pointsam_root: /DATA/disk0/zykh/wzy/code/pointsam_last
+
+    # ── 维度 ──
+    embed_dim: 256               # pc_pe 输出维度 (= pc_proj 目标维度)
+    out_dim: 256                 # 同上, 传给 DP3Encoder 的 pc_output_dim
+
+    # ── Hydra 模型配置 ──
+    heatmap_config_name: large_heatmap_uni3d_token_similarity
+    heatmap_config_dir: null     # null = 自动用 <pointsam_root>/configs
+    heatmap_as_prob: true        # heatmap 输出 sigmoid 为概率 [0,1]
+
+    # ── Checkpoint ──
+    load_checkpoint: true
+    checkpoint_path: /DATA/disk0/zykh/wzy/code/pointsam_last/logs/affogato_heatmap_uni3d_token_similarity_0706/use/checkpoint_epoch_0027_step_00077980_iou_0.178100
+    strict_load: false
+    ignore_mismatched_sizes: true
+
+    # ── Freeze 策略 ──
+    freeze: true                 # 冻结 PointSAM 组件和 bridge pc_proj
+
+  fps_random_config:
+    use_random: true
+    random_start: true
+    random_noise_scale: 0
+    shuffle_output: true
+
+  use_target_ee: false
+  cat_on_token: false
+
+data_augmentation:
+  use_augmentation: true
+  pc_xyz_noise_std: 0.002
+  pc_rgb_noise_std: 0
+  agent_pos_noise_std: 0.0002
+  use_color_jitter: true
+  brightness_range: [-0.125, 0.125]
+  contrast_range: [0.5, 1.5]
+  saturation_range: [0.5, 1.5]
+
+ema:
+  _target_: r3d.model.diffusion.ema_model.EMAModel
+  update_after_step: 0
+  inv_gamma: 1.0
+  power: 0.75
+  min_value: 0.0
+  max_value: 0.9999
+
+dataloader:
+  batch_size: 32
+  num_workers: 8
+  shuffle: True
+  pin_memory: True
+  persistent_workers: False
+
+val_dataloader:
+  batch_size: 64
+  num_workers: 8
+  shuffle: False
+  pin_memory: True
+  persistent_workers: False
+
+optimizer:
+  _target_: torch.optim.AdamW
+  lr: 1.0e-4
+  betas: [0.95, 0.999]
+  eps: 1.0e-8
+  weight_decay: 1.0e-6
+
+training:
+  device: "cuda:0"
+  seed: 42
+  debug: False
+  resume: True
+  lr_scheduler: cosine
+  lr_warmup_steps: 500
+  num_epochs: 3001
+  gradient_accumulate_every: 1
+  use_ema: True
+  use_bfloat16: True
+  rollout_every: 200
+  checkpoint_every: 200
+  val_every: 1
+  sample_every: 5
+  max_train_steps: null
+  max_val_steps: null
+  tqdm_interval_sec: 1.0
+  use_ddp: false
+  local_rank: 0
+
+logging:
+  group: ${task_name}
+  id: null
+  mode: offline
+  name: ${exp_name}
+  project: r3d
+  resume: true
+  tags:
+  - r3d
+  - metaworld
+  - pointsam_heatmap_bridge
+
+checkpoint:
+  save_ckpt: False
+  topk:
+    monitor_key: test_mean_score
+    mode: max
+    k: 1
+    format_str: 'epoch={epoch:04d}-test_mean_score={test_mean_score:.3f}.ckpt'
+  save_last_ckpt: True
+  save_last_snapshot: False
+
+multi_run:
+  run_dir: data/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}
+  wandb_name_base: ${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}
+
+hydra:
+  job:
+    override_dirname: ${name}
+  run:
+    dir: data/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}
+  sweep:
+    dir: data/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}
+    subdir: ${hydra.job.num}

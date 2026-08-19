@@ -1,0 +1,54 @@
+name: franka_grasp_peg_assembly
+
+# Square is the only behavior-cloning training domain and the ID evaluation
+# domain.  The standalone evaluator constructs fresh triangle and rectangle
+# runners as shape-OOD domains while keeping the reset-pose distribution ID.
+task_name: peg_assembly
+
+shape_meta: &shape_meta
+  obs:
+    point_cloud:
+      shape: [512, 6]
+      type: point_cloud
+    agent_pos:
+      shape: [34]
+      type: low_dim
+  action:
+    shape: [7]
+
+env_runner:
+  _target_: r3d.env_runner.franka_grasp_peg_assembly_runner.FrankaGraspPegAssemblyRunner
+  eval_episodes: 20
+  max_steps: 400
+  n_obs_steps: ${n_obs_steps}
+  n_action_steps: ${n_action_steps}
+  fps: 10
+  shape_name: square
+  policy_command: peg_assembly
+  clearance: 0.0005
+  distribution: id
+  num_points: 512
+  image_size: 128
+  save_video: false
+  deterministic_eval_seed: 100000
+  # Formal demonstrations are collected from rendered RGB-D. Evaluation must
+  # use the same observation distribution; geometry is smoke-only.
+  observation_mode: rgbd
+
+dataset:
+  _target_: r3d.dataset.franka_grasp_peg_assembly_dataset.FrankaGraspPegAssemblyDataset
+  zarr_path: data/franka_grasp_square_expert_200ep.zarr
+  horizon: ${horizon}
+  pad_before: ${eval:'${n_obs_steps}-1'}
+  pad_after: ${eval:'${n_action_steps}-1'}
+  seed: 42
+  val_ratio: 0.02
+  max_train_episodes: null
+  task_name: peg_assembly
+  validate_shapes: true
+  expected_shape: square
+  expected_distribution: train
+  point_cloud_num_points: 512
+  state_dim: 34
+  normalizer_train_split_only: true
+  normalizer_chunk_size: 2048

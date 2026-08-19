@@ -1,0 +1,30 @@
+# Affogato heatmap 训练集配置
+# 使用 ToTensorHeatmap（保留 float gt_masks）+ RandomSampleHeatmap
+
+dataset:
+  format: affogato_text
+  path: ${oc.env:AFFOGATO_DATA_ROOT}
+  split: "train"
+  split_file: ${oc.env:AFFOGATO_SPLIT_ROOT}/train.json
+  normalize_heatmap: false
+  default_rgb: 100.0
+
+transforms:
+  - _target_: pc_sam.datasets.transforms.NormalizePoints
+
+  - _target_: pc_sam.datasets.transforms.NormalizeColor
+    mean: 0.5
+    std: 0.5
+
+  - _target_: pc_sam.datasets.transforms.RandomSampleHeatmap
+    num_samples: ${num_samples}
+
+  - _target_: pc_sam.datasets.transforms.RandomScale
+    low: 0.8
+    high: 1.0
+
+  - _target_: pc_sam.datasets.transforms.RandomRotatePerbuate
+
+  - _target_: pc_sam.datasets.transforms.RandomRotateAlongAxis
+
+  - _target_: pc_sam.datasets.transforms.ToTensorHeatmap

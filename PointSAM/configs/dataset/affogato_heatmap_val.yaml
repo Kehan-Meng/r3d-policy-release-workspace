@@ -1,0 +1,26 @@
+# Affogato heatmap 验证集配置
+
+
+dataset:
+  format: affogato_text
+  path: ${oc.env:AFFOGATO_DATA_ROOT}
+  split: "val"
+  split_file: ${oc.env:AFFOGATO_SPLIT_ROOT}/val.json
+  normalize_heatmap: false
+  val_ratio: 0.1
+  default_rgb: 100.0
+#normalize_heatmap 涉及gtmask的归一化，为flase
+
+
+transforms:
+  - _target_: pc_sam.datasets.transforms.NormalizePoints
+
+  - _target_: pc_sam.datasets.transforms.NormalizeColor
+    mean: 0.5
+    std: 0.5
+
+  - _target_: pc_sam.datasets.transforms.DeterministicSampleHeatmap
+    num_samples: ${num_samples}
+    seed: 233
+
+  - _target_: pc_sam.datasets.transforms.ToTensorHeatmap

@@ -1,0 +1,82 @@
+config_version: 1
+name: maniskill2_pickcube_base_camera_v1
+benchmark: maniskill2
+task: PickCube
+canonical_frame: maniskill_pickplace_base_camera_cv
+require_metadata: true
+status: supported_static_historical_dataset_profile
+semantic_alignment: true
+data_operation:
+  type: coordinate_reexpression
+  point_selection_preserved: true
+  rerendered_from_depth: false
+provenance:
+  point_cloud_wrapper: R3D/r3d/env/maniskill2/mani_skill2/utils/wrappers/observation.py
+  camera_source: R3D/r3d/env/maniskill2/mani_skill2/envs/pick_and_place/base_env.py
+  camera_name: base_camera
+  point_cloud_sources: [base_camera, hand_camera]
+  camera_static_across_audited_seeds: true
+native_contract:
+  point_cloud_dim: 6
+  state_dim: 12
+  action_dim: 8
+  point_cloud_frame: world
+  state_semantics: panda_qpos9_plus_goal_position_world3
+  action_semantics: panda_pd_joint_pos7_plus_gripper1
+  control_mode: pd_joint_pos
+transforms:
+  - name: pickplace_base_camera_cv_from_world
+    source_frame: world
+    target_frame: maniskill_pickplace_base_camera_cv
+    provider:
+      type: static
+      length_unit: meter
+      matrix:
+        - [0.0, 1.0, 0.0, 0.0]
+        - [0.7808688094430304, 0.0, -0.6246950475544243, 0.14055638569974546]
+        - [-0.6246950475544243, 0.0, -0.7808688094430304, 0.6559297999321455]
+        - [0.0, 0.0, 0.0, 1.0]
+schemas:
+  observation: &observation
+    name: maniskill2_pickcube_camera_observation
+    tensors:
+      - name: point_cloud
+        key_path: point_cloud
+        expected_last_dim: 6
+        fields:
+          - {name: xyz, slice: [0, 3], kind: point, source_frame: world, target_frame: maniskill_pickplace_base_camera_cv, units: meter, preserve_zero_sentinel: true}
+          - {name: rgb, slice: [3, 6], kind: passthrough}
+      - name: agent_pos
+        key_path: agent_pos
+        expected_last_dim: 12
+        fields:
+          - {name: qpos, slice: [0, 9], kind: joint}
+          - {name: goal_position, slice: [9, 12], kind: point, source_frame: world, target_frame: maniskill_pickplace_base_camera_cv, units: meter}
+  action: &action
+    name: maniskill2_pickcube_joint_action
+    tensors:
+      - name: action
+        key_path: ""
+        expected_last_dim: 8
+        fields:
+          - {name: pd_joint_pos, slice: [0, 8], kind: joint}
+  training:
+    name: maniskill2_pickcube_camera_training
+    tensors:
+      - name: point_cloud
+        key_path: point_cloud
+        expected_last_dim: 6
+        fields:
+          - {name: xyz, slice: [0, 3], kind: point, source_frame: world, target_frame: maniskill_pickplace_base_camera_cv, units: meter, preserve_zero_sentinel: true}
+          - {name: rgb, slice: [3, 6], kind: passthrough}
+      - name: agent_pos
+        key_path: agent_pos
+        expected_last_dim: 12
+        fields:
+          - {name: qpos, slice: [0, 9], kind: joint}
+          - {name: goal_position, slice: [9, 12], kind: point, source_frame: world, target_frame: maniskill_pickplace_base_camera_cv, units: meter}
+      - name: action
+        key_path: action
+        expected_last_dim: 8
+        fields:
+          - {name: pd_joint_pos, slice: [0, 8], kind: joint}

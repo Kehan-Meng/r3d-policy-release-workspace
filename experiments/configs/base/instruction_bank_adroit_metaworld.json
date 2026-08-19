@@ -1,0 +1,563 @@
+{
+  "assembly": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the nut to place it onto the peg.",
+      "Pick up a nut and place it onto a peg.",
+      "Grasp the nut and place it onto the peg.",
+      "Lift the nut and put it onto the peg.",
+      "Pick the nut up and align it with the peg.",
+      "Use the gripper to place the nut onto the peg."
+    ]
+  },
+  "basketball": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the basketball to place it in the basket.",
+      "Dunk the basketball into the basket.",
+      "Put the basketball into the basket.",
+      "Move the basketball into the basket.",
+      "Pick up the basketball and place it in the basket.",
+      "Drop the basketball into the basket."
+    ]
+  },
+  "bin-picking": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the puck to move it between the bins.",
+      "Grasp the puck from one bin and place it into another bin.",
+      "Pick the puck from one bin and move it to another bin.",
+      "Lift the puck out of one bin and place it in the other bin.",
+      "Use the gripper to transfer the puck between bins.",
+      "Take the puck from the first bin and put it into the second bin."
+    ]
+  },
+  "box-close": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the cover to close the box.",
+      "Grasp the cover and close the box with it.",
+      "Pick up the cover and use it to close the box.",
+      "Move the cover onto the box to close it.",
+      "Grasp the lid and place it over the box.",
+      "Use the gripper to close the box with the cover."
+    ]
+  },
+  "button-press": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the button to press it.",
+      "Press a button.",
+      "Push the button.",
+      "Use the gripper to press the button.",
+      "Move the end-effector onto the button and press it.",
+      "Apply downward pressure to the button."
+    ]
+  },
+  "button-press-topdown": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the button to press it from above.",
+      "Press a button from the top.",
+      "Push the button downward from above.",
+      "Press the button using a top-down motion.",
+      "Move above the button and press it down.",
+      "Apply vertical pressure to the button from the top."
+    ]
+  },
+  "button-press-topdown-wall": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the button beyond the wall to press it from above.",
+      "Bypass a wall and press a button from the top.",
+      "Move around the wall and press the button from above.",
+      "Avoid the wall and push the button downward from the top.",
+      "Reach past the wall and press the button top-down.",
+      "Go around the wall to press the button from above."
+    ]
+  },
+  "button-press-wall": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the button beyond the wall to press it.",
+      "Bypass a wall and press a button.",
+      "Move around the wall and press the button.",
+      "Avoid the wall obstacle and push the button.",
+      "Reach past the wall to press the button.",
+      "Go around the wall and activate the button."
+    ]
+  },
+  "coffee-button": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the coffee machine button to press it.",
+      "Push a button on the coffee machine.",
+      "Press the coffee machine button.",
+      "Use the gripper to push the button on the coffee machine.",
+      "Activate the coffee machine by pressing its button.",
+      "Move to the coffee machine and press the button."
+    ]
+  },
+  "coffee-pull": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the mug to pull it from the coffee machine.",
+      "Pull a mug from a coffee machine.",
+      "Pull the mug away from the coffee machine.",
+      "Move the mug out from the coffee machine.",
+      "Use the gripper to pull the mug from the machine.",
+      "Draw the mug away from the coffee machine."
+    ]
+  },
+  "coffee-push": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the mug to push it under the coffee machine.",
+      "Push a mug under a coffee machine.",
+      "Move the mug beneath the coffee machine.",
+      "Slide the mug under the coffee machine.",
+      "Nudge the mug into the area under the coffee machine.",
+      "Guide the mug below the coffee machine."
+    ]
+  },
+  "dial-turn": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the dial to rotate it 180 degrees.",
+      "Rotate a dial 180 degrees.",
+      "Turn the dial by 180 degrees.",
+      "Twist the dial halfway around.",
+      "Use the gripper to rotate the dial 180 degrees.",
+      "Move the dial through a half rotation."
+    ]
+  },
+  "disassemble": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the nut to remove it from the peg.",
+      "Pick a nut out of the a peg.",
+      "Pick the nut off the peg.",
+      "Remove the nut from the peg.",
+      "Lift the nut away from the peg.",
+      "Use the gripper to take the nut off the peg."
+    ]
+  },
+  "door": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the door handle to open the door.",
+      "Open the door to the target position.",
+      "Move the door open until it reaches the target position.",
+      "Use the hand to open the door to its target position.",
+      "Pull the door open to the required position.",
+      "Manipulate the handle and open the door to the target position."
+    ]
+  },
+  "door-close": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the door to close it.",
+      "Close a door with a revolving joint.",
+      "Push the hinged door closed.",
+      "Move the door into the closed position.",
+      "Use the arm to close the revolving door.",
+      "Swing the door shut around its joint."
+    ]
+  },
+  "door-lock": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the door lock to rotate it clockwise.",
+      "Lock the door by rotating the lock clockwise.",
+      "Turn the door lock clockwise to lock it.",
+      "Rotate the lock clockwise into the locked position.",
+      "Use the gripper to twist the lock clockwise.",
+      "Secure the door by turning the lock clockwise."
+    ]
+  },
+  "door-open": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the door to open it.",
+      "Open a door with a revolving joint.",
+      "Pull the hinged door open.",
+      "Move the door into the open position.",
+      "Use the arm to open the revolving door.",
+      "Swing the door open around its joint."
+    ]
+  },
+  "door-unlock": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the door lock to rotate it counter-clockwise.",
+      "Unlock the door by rotating the lock counter-clockwise.",
+      "Turn the door lock counter-clockwise to unlock it.",
+      "Rotate the lock counter-clockwise into the unlocked position.",
+      "Use the gripper to twist the lock counter-clockwise.",
+      "Release the door lock by turning it counter-clockwise."
+    ]
+  },
+  "drawer-close": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the drawer to close it.",
+      "Push and close a drawer.",
+      "Push the drawer shut.",
+      "Move the drawer into the closed position.",
+      "Use the arm to push the drawer closed.",
+      "Slide the drawer inward until it closes."
+    ]
+  },
+  "drawer-open": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the drawer handle to open it.",
+      "Open a drawer.",
+      "Pull the drawer open.",
+      "Move the drawer into the open position.",
+      "Use the gripper to open the drawer.",
+      "Slide the drawer outward."
+    ]
+  },
+  "faucet-close": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the faucet to rotate it clockwise.",
+      "Rotate the faucet clockwise.",
+      "Turn the faucet clockwise to close it.",
+      "Twist the faucet in the clockwise direction.",
+      "Use the gripper to rotate the faucet clockwise.",
+      "Close the faucet by turning it clockwise."
+    ]
+  },
+  "faucet-open": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the faucet to rotate it counter-clockwise.",
+      "Rotate the faucet counter-clockwise.",
+      "Turn the faucet counter-clockwise to open it.",
+      "Twist the faucet in the counter-clockwise direction.",
+      "Use the gripper to rotate the faucet counter-clockwise.",
+      "Open the faucet by turning it counter-clockwise."
+    ]
+  },
+  "hammer": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the hammer to drive the screw into the wall.",
+      "Hammer a screw on the wall.",
+      "Use the hammer to hit the screw on the wall.",
+      "Strike the screw on the wall with the hammer.",
+      "Grasp the hammer and drive the screw into the wall.",
+      "Move the hammer to hit the wall screw."
+    ]
+  },
+  "hand-insert": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the hole to insert the gripper.",
+      "Insert the gripper into a hole.",
+      "Move the gripper into the hole.",
+      "Guide the gripper into the opening.",
+      "Place the gripper inside the hole.",
+      "Insert the hand into the hole."
+    ]
+  },
+  "handle-press": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the handle to press it down.",
+      "Press a handle down.",
+      "Push the handle downward.",
+      "Use the gripper to press the handle down.",
+      "Move the handle into the down position.",
+      "Apply downward pressure to the handle."
+    ]
+  },
+  "handle-press-side": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the handle to press it down sideways.",
+      "Press a handle down sideways.",
+      "Push the handle downward from the side.",
+      "Press the handle using a sideways approach.",
+      "Use the gripper to press the handle down from the side.",
+      "Move sideways and push the handle downward."
+    ]
+  },
+  "handle-pull": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the handle to pull it up.",
+      "Pull a handle up.",
+      "Lift the handle upward.",
+      "Use the gripper to pull the handle up.",
+      "Move the handle into the up position.",
+      "Pull upward on the handle."
+    ]
+  },
+  "handle-pull-side": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the handle to pull it up sideways.",
+      "Pull a handle up sideways.",
+      "Lift the handle upward from the side.",
+      "Pull the handle using a sideways approach.",
+      "Use the gripper to pull the handle up from the side.",
+      "Move sideways and pull the handle upward."
+    ]
+  },
+  "lever-pull": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the lever to pull it down 90 degrees.",
+      "Pull a lever down 90 degrees.",
+      "Pull the lever downward by 90 degrees.",
+      "Move the lever down to a 90 degree angle.",
+      "Rotate the lever downward by 90 degrees.",
+      "Lower the lever into the down position."
+    ]
+  },
+  "peg-insert-side": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the peg to insert it sideways.",
+      "Insert a peg sideways.",
+      "Push the peg sideways into the target.",
+      "Move the peg sideways into the goal.",
+      "Use the gripper to insert the peg from the side.",
+      "Align the peg sideways and insert it."
+    ]
+  },
+  "peg-unplug-side": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the peg to unplug it sideways.",
+      "Unplug a peg sideways.",
+      "Pull the peg out sideways.",
+      "Remove the peg using a side motion.",
+      "Use the gripper to unplug the peg from the side.",
+      "Extract the peg sideways from its slot."
+    ]
+  },
+  "pick-out-of-hole": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the puck to pick it out of the hole.",
+      "Pick up a puck from a hole.",
+      "Lift the puck out of the hole.",
+      "Pick the puck up from inside the hole.",
+      "Use the gripper to lift the puck from the hole.",
+      "Grasp the puck and raise it out of the hole."
+    ]
+  },
+  "pick-place": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the puck to place it at the goal.",
+      "Pick and place a puck to a goal.",
+      "Pick up the puck and place it at the goal.",
+      "Move the puck to the goal by grasping it.",
+      "Use the gripper to carry the puck to the goal.",
+      "Lift the puck and put it on the target."
+    ]
+  },
+  "pick-place-wall": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the puck to carry it around the wall.",
+      "Pick a puck, bypass a wall and place the puck.",
+      "Pick up the puck, move around the wall, and place it.",
+      "Grasp the puck and carry it past the wall to the goal.",
+      "Lift the puck, bypass the wall, and set it down.",
+      "Use the gripper to move the puck around the wall."
+    ]
+  },
+  "plate-slide": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the plate to slide it into the cabinet.",
+      "Slide a plate into a cabinet.",
+      "Push the plate into the cabinet.",
+      "Move the plate into the cabinet by sliding it.",
+      "Use the arm to slide the plate into the cabinet.",
+      "Guide the plate into the cabinet opening."
+    ]
+  },
+  "plate-slide-back": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the plate to pull it from the cabinet.",
+      "Get a plate from the cabinet.",
+      "Pull the plate out of the cabinet.",
+      "Slide the plate back from the cabinet.",
+      "Move the plate out of the cabinet.",
+      "Use the arm to retrieve the plate from the cabinet."
+    ]
+  },
+  "plate-slide-back-side": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the plate to pull it sideways from the cabinet.",
+      "Get a plate from the cabinet sideways.",
+      "Pull the plate sideways out of the cabinet.",
+      "Slide the plate back from the cabinet using a side approach.",
+      "Move the plate sideways out of the cabinet.",
+      "Use the arm to retrieve the plate sideways."
+    ]
+  },
+  "plate-slide-side": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the plate to slide it sideways into the cabinet.",
+      "Slide a plate into a cabinet sideways.",
+      "Push the plate sideways into the cabinet.",
+      "Move the plate into the cabinet using a side approach.",
+      "Use the arm to slide the plate sideways into the cabinet.",
+      "Guide the plate sideways into the cabinet opening."
+    ]
+  },
+  "push": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the puck to push it to the goal.",
+      "Push the puck to a goal.",
+      "Move the puck to the goal by pushing it.",
+      "Use the arm to push the puck toward the goal.",
+      "Slide the puck into the goal area.",
+      "Nudge the puck until it reaches the target."
+    ]
+  },
+  "push-back": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the puck to pull it to the goal.",
+      "Pull a puck to a goal.",
+      "Move the puck to the goal by pulling it.",
+      "Use the gripper to pull the puck toward the goal.",
+      "Draw the puck back to the target.",
+      "Pull the puck until it reaches the goal."
+    ]
+  },
+  "push-wall": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the puck to push it around the wall.",
+      "Bypass a wall and push a puck to a goal.",
+      "Move around the wall and push the puck to the goal.",
+      "Avoid the wall while pushing the puck toward the target.",
+      "Guide the puck around the wall and into the goal.",
+      "Use the arm to push the puck past the wall."
+    ]
+  },
+  "reach": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the goal position to reach it.",
+      "Reach a goal position.",
+      "Move the end-effector to the goal position.",
+      "Reach the target location.",
+      "Move the robot hand toward the goal.",
+      "Guide the gripper to the target position."
+    ]
+  },
+  "reach-wall": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the goal beyond the wall to reach it.",
+      "Bypass a wall and reach a goal.",
+      "Move around the wall and reach the goal.",
+      "Avoid the wall while moving to the target.",
+      "Reach the target position after bypassing the wall.",
+      "Guide the gripper around the wall to the goal."
+    ]
+  },
+  "shelf-place": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the puck to place it on the shelf.",
+      "Pick and place a puck onto a shelf.",
+      "Pick up the puck and put it on the shelf.",
+      "Use the gripper to place the puck onto the shelf.",
+      "Lift the puck and set it on the shelf.",
+      "Carry the puck to the shelf and place it there."
+    ]
+  },
+  "soccer": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the soccer ball to kick it into the goal.",
+      "Kick a soccer into the goal.",
+      "Push the soccer ball into the goal.",
+      "Move the soccer ball toward the goal.",
+      "Use the arm to kick the soccer into the goal.",
+      "Drive the soccer ball into the target goal."
+    ]
+  },
+  "stick-pull": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the stick to pull the box.",
+      "Grasp a stick and pull a box with the stick.",
+      "Use the stick to pull the box.",
+      "Pick up the stick and draw the box toward you.",
+      "Grasp the stick and drag the box with it.",
+      "Use the gripper to hold the stick and pull the box."
+    ]
+  },
+  "stick-push": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the stick to push the box.",
+      "Grasp a stick and push a box using the stick.",
+      "Use the stick to push the box.",
+      "Pick up the stick and push the box with it.",
+      "Grasp the stick and drive the box forward.",
+      "Use the gripper to hold the stick and push the box."
+    ]
+  },
+  "sweep": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the puck to sweep it off the table.",
+      "Sweep a puck off the table.",
+      "Push the puck off the table.",
+      "Move the puck off the table by sweeping it.",
+      "Use the arm to sweep the puck away.",
+      "Slide the puck off the table surface."
+    ]
+  },
+  "sweep-into": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the puck to sweep it into the hole.",
+      "Sweep a puck into a hole.",
+      "Push the puck into the hole.",
+      "Move the puck into the hole by sweeping it.",
+      "Use the arm to sweep the puck into the opening.",
+      "Slide the puck into the hole."
+    ]
+  },
+  "window-close": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the window to close it.",
+      "Push and close a window.",
+      "Push the window closed.",
+      "Move the window into the closed position.",
+      "Use the arm to close the window.",
+      "Slide the window shut."
+    ]
+  },
+  "window-open": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the window to open it.",
+      "Push and open a window.",
+      "Push the window open.",
+      "Move the window into the open position.",
+      "Use the arm to open the window.",
+      "Slide the window open."
+    ]
+  }
+}

@@ -1,0 +1,74 @@
+config_version: 1
+name: adroit_door_legacy_camera_v1
+benchmark: adroit
+task: door
+canonical_frame: adroit_door_cv_camera
+require_metadata: true
+data_operation:
+  type: coordinate_reexpression
+  point_selection_preserved: true
+  rerendered_from_depth: false
+native_contract:
+  point_cloud_dim: 6
+  state_dim: 24
+  action_dim: 28
+  point_cloud_frame: legacy_synthetic_frame
+  state_semantics: adroit_door_joint_proprioception24
+  action_semantics: adroit_door_normalized_mujoco_actuator28
+transform_provenance:
+  source: calibrated_from_adroit_door_legacy_pointcloud_pipeline
+  rotation_projection_max_abs: 5.328890004818732e-7
+transforms:
+  - name: adroit_door_cv_camera_from_legacy
+    source_frame: legacy_synthetic_frame
+    target_frame: adroit_door_cv_camera
+    provider:
+      type: static
+      length_unit: meter
+      matrix:
+        - [1.0, 0.0, 0.0, 0.0]
+        - [0.0, -0.9999999999993313, 1.156706576584517e-6, -1.156706576584517e-6]
+        - [0.0, -1.156706576584517e-6, -0.999999999999331, 0.999999999999331]
+        - [0.0, 0.0, 0.0, 1.0]
+schemas: &schemas
+  observation:
+    name: adroit_door_observation
+    tensors:
+      - name: point_cloud
+        key_path: point_cloud
+        expected_last_dim: 6
+        fields:
+          - {name: xyz, slice: [0, 3], kind: point, source_frame: legacy_synthetic_frame, target_frame: adroit_door_cv_camera, units: meter}
+          - {name: rgb, slice: [3, 6], kind: passthrough}
+      - name: agent_pos
+        key_path: agent_pos
+        expected_last_dim: 24
+        fields:
+          - {name: proprioception, slice: [0, 24], kind: joint}
+  action:
+    name: adroit_door_action
+    tensors:
+      - name: action
+        key_path: ""
+        expected_last_dim: 28
+        fields:
+          - {name: native_actuator, slice: [0, 28], kind: actuator}
+  training:
+    name: adroit_door_training
+    tensors:
+      - name: point_cloud
+        key_path: point_cloud
+        expected_last_dim: 6
+        fields:
+          - {name: xyz, slice: [0, 3], kind: point, source_frame: legacy_synthetic_frame, target_frame: adroit_door_cv_camera, units: meter}
+          - {name: rgb, slice: [3, 6], kind: passthrough}
+      - name: agent_pos
+        key_path: agent_pos
+        expected_last_dim: 24
+        fields:
+          - {name: proprioception, slice: [0, 24], kind: joint}
+      - name: action
+        key_path: action
+        expected_last_dim: 28
+        fields:
+          - {name: native_actuator, slice: [0, 28], kind: actuator}

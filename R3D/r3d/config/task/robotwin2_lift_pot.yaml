@@ -1,0 +1,32 @@
+name: robotwin2_lift_pot
+
+task_entries: &task_entries
+  - task_name: lift_pot
+    setting: demo_randomized
+    zarr_path: /DATA/disk0/zykh/wzy/code/R3D-Policy/R3D/data/robotwin2_demo20/lift_pot-demo_randomized-20-seed0.zarr
+    text_command: lift_pot
+
+shape_meta: &shape_meta
+  obs:
+    point_cloud:
+      shape: [1024, 6]
+      type: point_cloud
+    agent_pos:
+      shape: [14]
+      type: low_dim
+
+env_runner:
+  _target_: r3d.env_runner.robotwin2_runner.RoboTwin2Runner
+  n_obs_steps: 2
+  n_action_steps: 4
+  eval_episodes: 100
+  max_steps: 2000
+  fps: 10
+  task_entries: *task_entries
+  task_onehot_dim: 1
+  shape_meta: *shape_meta
+  dataset:
+    _target_: r3d.dataset.robotwin2_dataset.RoboTwin2Dataset
+    task_entries: *task_entries
+    task_onehot_dim: 1
+    shape_meta: *shape_meta

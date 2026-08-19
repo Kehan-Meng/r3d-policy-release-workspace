@@ -1,0 +1,80 @@
+config_version: 1
+name: maniskill2_peginsertionside_base_camera_v1
+benchmark: maniskill2
+task: PegInsertionSide
+canonical_frame: maniskill_peginsertion_base_camera_cv
+require_metadata: true
+status: supported_static_historical_dataset_profile
+semantic_alignment: true
+data_operation:
+  type: coordinate_reexpression
+  point_selection_preserved: true
+  rerendered_from_depth: false
+provenance:
+  point_cloud_wrapper: R3D/r3d/env/maniskill2/mani_skill2/utils/wrappers/observation.py
+  camera_source: R3D/r3d/env/maniskill2/mani_skill2/envs/assembly/peg_insertion_side.py
+  camera_name: base_camera
+  point_cloud_sources: [base_camera, hand_camera]
+  camera_static_across_audited_seeds: true
+native_contract:
+  point_cloud_dim: 6
+  state_dim: 9
+  action_dim: 8
+  point_cloud_frame: world
+  state_semantics: panda_qpos9
+  action_semantics: panda_pd_joint_pos7_plus_gripper1
+  control_mode: pd_joint_pos
+transforms:
+  - name: peginsertion_base_camera_cv_from_world
+    source_frame: world
+    target_frame: maniskill_peginsertion_base_camera_cv
+    provider:
+      type: static
+      length_unit: meter
+      matrix:
+        - [1.0, 0.0, 0.0, 0.0]
+        - [0.0, -0.31622776601683794, -0.9486832980505138, 0.09486832980505139]
+        - [0.0, 0.9486832980505138, -0.31622776601683794, 0.3478505426185217]
+        - [0.0, 0.0, 0.0, 1.0]
+schemas:
+  observation:
+    name: maniskill2_peginsertionside_camera_observation
+    tensors:
+      - name: point_cloud
+        key_path: point_cloud
+        expected_last_dim: 6
+        fields:
+          - {name: xyz, slice: [0, 3], kind: point, source_frame: world, target_frame: maniskill_peginsertion_base_camera_cv, units: meter, preserve_zero_sentinel: true}
+          - {name: rgb, slice: [3, 6], kind: passthrough}
+      - name: agent_pos
+        key_path: agent_pos
+        expected_last_dim: 9
+        fields:
+          - {name: qpos, slice: [0, 9], kind: joint}
+  action:
+    name: maniskill2_peginsertionside_joint_action
+    tensors:
+      - name: action
+        key_path: ""
+        expected_last_dim: 8
+        fields:
+          - {name: pd_joint_pos, slice: [0, 8], kind: joint}
+  training:
+    name: maniskill2_peginsertionside_camera_training
+    tensors:
+      - name: point_cloud
+        key_path: point_cloud
+        expected_last_dim: 6
+        fields:
+          - {name: xyz, slice: [0, 3], kind: point, source_frame: world, target_frame: maniskill_peginsertion_base_camera_cv, units: meter, preserve_zero_sentinel: true}
+          - {name: rgb, slice: [3, 6], kind: passthrough}
+      - name: agent_pos
+        key_path: agent_pos
+        expected_last_dim: 9
+        fields:
+          - {name: qpos, slice: [0, 9], kind: joint}
+      - name: action
+        key_path: action
+        expected_last_dim: 8
+        fields:
+          - {name: pd_joint_pos, slice: [0, 8], kind: joint}

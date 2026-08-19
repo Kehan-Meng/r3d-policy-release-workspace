@@ -1,0 +1,49 @@
+name: peg_assembly
+
+# Square is the only behavior-cloning training domain and the ID evaluation
+# domain. The standalone evaluator constructs fresh triangle and rectangle
+# runners as shape-OOD domains while keeping the reset-pose distribution ID.
+task_name: peg_assembly
+
+shape_meta: &shape_meta
+  obs:
+    point_cloud:
+      shape: [512, 6]
+      type: point_cloud
+    agent_pos:
+      shape: [30]
+      type: low_dim
+  action:
+    shape: [6]
+
+env_runner:
+  _target_: r3d.env_runner.peg_assembly_runner.PegAssemblyRunner
+  eval_episodes: 20
+  max_steps: 400
+  n_obs_steps: ${n_obs_steps}
+  n_action_steps: ${n_action_steps}
+  fps: 10
+  shape_name: square
+  policy_command: peg_assembly
+  clearance: 0.0005
+  distribution: id
+  num_points: 512
+  image_size: 128
+  save_video: false
+  deterministic_eval_seed: 100000
+
+dataset:
+  _target_: r3d.dataset.peg_assembly_dataset.PegAssemblyDataset
+  zarr_path: data/peg_assembly_square_expert_200ep.zarr
+  horizon: ${horizon}
+  pad_before: ${eval:'${n_obs_steps}-1'}
+  pad_after: ${eval:'${n_action_steps}-1'}
+  seed: 42
+  val_ratio: 0.02
+  max_train_episodes: null
+  task_name: peg_assembly
+  validate_shapes: true
+  expected_shape: square
+  expected_distribution: train
+  normalizer_train_split_only: true
+  normalizer_chunk_size: 2048

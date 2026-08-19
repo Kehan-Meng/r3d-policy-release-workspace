@@ -1,0 +1,16 @@
+name: r3d-release
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - setuptools>=68
+  - wheel
+  - ninja
+  - cmake
+  - gcc_linux-64=11
+  - gxx_linux-64=11
+  - pip:
+      - -r environment/requirements.txt

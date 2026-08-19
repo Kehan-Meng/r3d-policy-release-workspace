@@ -1,0 +1,278 @@
+defaults:
+  - task: robotwin2_demo_task
+
+name: train_r3d_robotwin2
+
+task_name: null
+shape_meta: ${task.shape_meta}
+exp_name: "r3d_robotwin2"
+setting: null
+
+# horizon: 4
+horizon: 16
+n_obs_steps: 2
+# n_action_steps: 3
+n_action_steps: 8
+n_latency_steps: 0
+dataset_obs_steps: ${n_obs_steps}
+keypoint_visible_rate: 1.0
+obs_as_global_cond: True
+
+frame_adapter:
+  enabled: false
+  profile_path: null
+  augmentation_frame: policy
+  allow_frame_config_override: false
+  normalizer:
+    train_split_only: true
+    chunk_size: 2048
+
+policy:
+  _target_: r3d.policy.dp3.DP3
+  use_point_crop: true
+  condition_type: one_way_transformer # Options: "film", "one_way_transformer"
+  use_down_condition: true
+  use_mid_condition: true
+  use_up_condition: true
+  
+  diffusion_step_embed_dim: 128
+  down_dims:
+  - 512
+  - 1024
+  - 2048
+  crop_shape:
+  - 80
+  - 80
+  encoder_output_dim: 1024 # could be ignore, will be replaced by pointcloud_encoder_config.embed_dim
+  horizon: ${horizon}
+  kernel_size: 5
+  n_action_steps: ${n_action_steps}
+  n_groups: 8
+  n_obs_steps: ${n_obs_steps}
+
+  # OneWayTransformer parameters
+  transformer_config:
+    depth: 4
+    embedding_dim: 256
+    num_heads: 8
+    mlp_dim: 2048
+
+  use_act: true
+  act_config:
+    num_queries: 16
+    num_heads: 8
+    heatmap_mode: none
+    log_bias_lambda: 1.0
+    dropout: 0.0
+    ffn_ratio: 4.0
+    use_pc_pe_in_input: true
+    pe_scale_init: 1.0
+    use_pseudo_heatmap: false
+    pseudo_text_pool: cls
+    pseudo_heatmap_normalize: minmax
+    drop_cls_token: false
+
+  mq_diversity:
+    eps: 1.0e-6
+    raw:
+      enabled: false
+      weight: 0.0
+    flow:
+      enabled: false
+      weight: 0.0
+      detach_projection_params: true
+
+  # Optional ACT-primary sidecar. It queries pre-ACT visual patch tokens from
+  # the frozen ACT/Flow action hidden and predicts a bounded velocity residual.
+  dense_residual_reader:
+    enabled: false
+    num_heads: 4
+    downsample_rate: 4
+    max_residual_ratio: 0.10
+    initial_residual_ratio: 0.001
+    fixed_residual_ratio: null
+    scale_floor: 0.05
+    eps: 1.0e-6
+    detach_inputs: true
+    null_subtract: false
+    interaction_subtract: false
+
+  noise_scheduler:
+    _target_: diffusers.schedulers.scheduling_ddim.DDIMScheduler
+    num_train_timesteps: 100
+    beta_start: 0.0001
+    beta_end: 0.02
+    beta_schedule: squaredcos_cap_v2
+    clip_sample: True
+    set_alpha_to_one: True
+    steps_offset: 0
+    prediction_type: sample
+
+  # Action generation branch. Keep diffusion as default to preserve old experiments.
+  generation_type: diffusion
+  flow_matching:
+    # Stability defaults for our R3D/FMT branch.
+    # FlowPolicy original defaults are closer to eps=1e-8, delta=1e-3.
+    eps: 1.0e-2
+    delta: 1.0e-2
+    num_segments: 2
+    boundary: 1
+    alpha: 1.0e-5
+    stop_gradient_target: true
+    direct_velocity_weight: 0.0
+    num_inference_steps: 1
+    # time_scale is omitted by default and becomes num_train_timesteps - 1.
+    # S6-audit: per-joint FK Jacobian weighting (S6-4)
+    use_joint_fk_weighting: false
+    # S6-audit: dual-arm differential geometry loss weight (S6-5)
+    dual_arm_diff_weight: 0.0
+
+  num_inference_steps: 10
+  obs_as_global_cond: true
+  shape_meta: ${shape_meta}
+
+  use_pc_color: true
+  pointnet_type: "uni3d"
+
+  # Text conditioning. Set use_text=true to enable CLIP text features.
+  use_text: true
+  text_json_path: R3D/data/text.json
+  task_name: ${task_name}
+  clip_model_name: openai/clip-vit-base-patch32
+  text_feat_dim: 64
+  freeze_clip: true
+  strict_text_lookup: false
+
+  # ACTTextAlignHead — training-only auxiliary supervision.
+  use_act_text_align: false
+  act_text_align_config:
+    lambda_max: 0.0
+    warmup_steps: 1000
+    mask_ratio: 0.3
+    num_heads: 8
+    mlp_ratio: 4.0
+
+
+  pointcloud_encoder_cfg:
+    pc_model: "eva02_tiny_patch14_224"
+    pc_feat_dim: 192
+    embed_dim: 256
+    group_size: 32
+    num_group: 512
+    patch_dropout: 0 # pointSAM without patch_dropout
+    drop_path_rate: 0.2
+    pretrained_pc: null # Point transformer in Uni3D is initialized empty
+    pc_encoder_dim: 512
+    use_pretrained_weights: true
+    pretrained_weights_path: R3D/pretrain_weight  # Pretrained weights path
+    normalization_type: "layer_norm"  # Options: "batch_norm", "layer_norm", "none"
+    feature_mode: "pointsam" # Options: "pointsam", "cls", "max_pooling"
+
+  # FPS randomness config
+  fps_random_config:
+    use_random: true          # Enable randomness
+    random_start: true        # Use random starting point
+    random_noise_scale: 0     # Noise scale (0 = no noise)
+    shuffle_output: true      # Shuffle output order
+  
+  use_target_ee: false # remember change action.shape in {task}.yaml when enabling ee prediction
+  cat_on_token: false
+
+data_augmentation:
+  use_augmentation: true      # Enable data augmentation
+  pc_xyz_noise_std: 0.002
+  pc_rgb_noise_std: 0
+  agent_pos_noise_std: 0.0002  # agent_pos noise std
+  agent_pos_perturb_std: 0.0     # S6: recovery-style perturbation std (rad), arm joints only
+  
+  # Color jitter parameters
+  use_color_jitter: true      # Enable color jitter augmentation
+  brightness_range: [-0.125, 0.125]   # Brightness range
+  contrast_range: [0.5, 1.5]          # Contrast range
+  saturation_range: [0.5, 1.5]        # Saturation range
+
+
+ema:
+  _target_: r3d.model.diffusion.ema_model.EMAModel
+  update_after_step: 0
+  inv_gamma: 1.0
+  power: 0.75
+  min_value: 0.0
+  max_value: 0.9999
+
+dataloader:
+  batch_size: 256
+  num_workers: 8
+  shuffle: True
+  pin_memory: True
+  persistent_workers: False
+
+val_dataloader:
+  batch_size: 256
+  num_workers: 8
+  shuffle: False
+  pin_memory: True
+  persistent_workers: False
+
+optimizer:
+  _target_: torch.optim.AdamW
+  lr: 1.0e-4
+  betas: [0.95, 0.999]
+  eps: 1.0e-8
+  weight_decay: 1.0e-6
+
+training:
+  device: "cuda:0"
+  seed: 42
+  debug: False
+  resume: True
+  lr_scheduler: cosine
+  lr_warmup_steps: 500
+  num_epochs: 3001
+  gradient_accumulate_every: 1
+  use_ema: True
+  use_bfloat16: True
+  rollout_every: 200
+  checkpoint_every: 200
+  val_every: 1
+  sample_every: 5
+  max_train_steps: null
+  max_val_steps: null
+  tqdm_interval_sec: 1.0
+  # DDP related settings
+  use_ddp: false
+  local_rank: 0
+
+logging:
+  group: ${task_name}
+  id: null
+  mode: online
+  name: ${exp_name}
+  project: r3d
+  resume: true
+  tags:
+  - r3d
+  - robotwin
+
+checkpoint:
+  save_ckpt: False # if True, save checkpoint every checkpoint_every
+  topk:
+    monitor_key: test_mean_score
+    mode: max
+    k: 1
+    format_str: 'epoch={epoch:04d}-test_mean_score={test_mean_score:.3f}.ckpt'
+  save_last_ckpt: True # this only saves when save_ckpt is True
+  save_last_snapshot: False
+
+multi_run:
+  run_dir: data/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}
+  wandb_name_base: ${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}
+
+hydra:
+  job:
+    override_dirname: ${name}
+  run:
+    dir: data/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}
+  sweep:
+    dir: data/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}
+    subdir: ${hydra.job.num}

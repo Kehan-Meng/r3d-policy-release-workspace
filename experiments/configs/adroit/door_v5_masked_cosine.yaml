@@ -1,0 +1,164 @@
+experiment:
+  name: adroit_door_v5_masked_cosine
+  output_dir: outputs/adroit_door_v5_masked_cosine
+  results_dir: experiments/results/adroit_door_v5_masked_cosine
+runtime:
+  gpu_id: 0
+sequence:
+  horizon: 4
+  n_action_steps: 4
+hydra:
+  config_name: r3d_metaworld.yaml
+task:
+  config: adroit_door
+  name: door
+  num_points: 512
+data:
+  train_zarr_path: R3D/data/adroit_door_expert.zarr
+  text_json_path: experiments/configs/base/instruction_bank_adroit_metaworld.json
+policy:
+  use_text: true
+  use_text_for_global_cond: false
+  clip_model_name: openai/clip-vit-base-patch32
+  freeze_clip: true
+  text_feat_dim: 64
+  use_act: true
+  pointnet_type: pointsam_twowayCA_v4
+  generation_type: flow_matching
+  flow_matching:
+    eps: 0.01
+    delta: 0.01
+    num_segments: 2
+    boundary: 1
+    alpha: 1.0e-05
+    consistency_weight: 1.0
+    num_inference_steps: 4
+    stop_gradient_target: true
+    direct_velocity_weight: 1.0
+    consistency_schedule: geometric
+    consistency_final_weight: 10.0
+    consistency_ramp_start_epoch: 200
+    consistency_ramp_end_epoch: 1400
+    consistency_schedule_power: 0.5
+    couple_alpha_to_consistency: false
+    alpha_to_consistency_ratio: 1.0e-05
+  act:
+    num_queries: 16
+    num_heads: 8
+    heatmap_mode: multiply
+    use_pseudo_heatmap: false
+    drop_cls_token: false
+    heatmap_gamma: 1.0
+    competitive_cross1: false
+    competitive_cross2: true
+    competitive_temperature: 1.5
+  pointcloud_encoder:
+    embed_dim: 256
+    out_dim: 256
+    heatmap_config_name: large_heatmap_uni3d_token_similarity
+    heatmap_config_dir: PointSAM/configs
+    heatmap_as_prob: true
+    load_checkpoint: true
+    checkpoint_path: pretrained/pointsam_twowayca_affogato_v1.safetensors
+    strict_load: false
+    ignore_mismatched_sizes: true
+    freeze: false
+    freeze_uni3d: true
+    freeze_out_proj: false
+    feature_mode: pointsam
+    bpe_path: PointSAM/resources/bpe_simple_vocab_16e6.txt.gz
+    point_feature_projection: pretrained
+  use_act_text_align: true
+  act_text_align_config:
+    lambda_max: 0.001
+    warmup_steps: 1000
+    text_input_dim: 512
+    mask_ratio: 0.3
+    num_heads: 8
+    mlp_ratio: 4.0
+    diagnostic:
+      enabled: true
+      every_n_steps: 200
+      compute_zero_act: true
+      compute_shuffle_act: true
+  mq_diversity:
+    eps: 1.0e-6
+    raw:
+      enabled: true
+      weight: 0.01
+    flow:
+      enabled: false
+      weight: 0.0
+      detach_projection_params: true
+training:
+  device: cuda:0
+  seed: 0
+  debug: false
+  resume: false
+  use_ddp: false
+  use_bfloat16: true
+  num_epochs: 2001
+  gradient_accumulate_every: 4
+  max_train_steps: null
+  max_val_steps: null
+  rollout_every: 1000000
+  checkpoint_every: 200
+  checkpoint_milestone_epochs: [0, 25, 50, 75, 100]
+  val_every: 1
+  sample_every: 1000000
+  batch_size: 32
+  val_batch_size: 32
+  num_workers: 4
+  logging_mode: offline
+  save_ckpt: true
+  lr: 0.0001
+  encoder_lr_scale: 0.1
+  encoder_unfreeze_epoch: 200
+checkpoint:
+  monitor_key: train_loss
+  mode: min
+  k: 20
+  format_str: epoch_{epoch:04d}-train_loss_{train_loss:.6f}.ckpt
+eval:
+  discover_task_dir: R3D/data
+  task_names:
+  - adroit_door
+  eval_episodes: 20
+  max_steps: 300
+  fps: 10
+report:
+  variant: compmq01_tau15_rawdiv0p01_maskedcos_ata1e3
+  generation_type: flow_matching
+  encoder: PointSAMTwoWayCAV4
+  heatmap_mode: corrected_multiply
+  task: adroit_door
+  points: 512
+  lr: 0.0001
+  encoder_lr_scale: 0.1
+  encoder_unfreeze_epoch: 200
+  batch_size: 32
+  gradient_accumulate_every: 4
+  effective_batch_size: 128
+  num_epochs: 2001
+  flow_num_inference_steps: 4
+  flow_stop_gradient_target: true
+  flow_direct_velocity_weight: 1.0
+  flow_consistency_final_weight: 10.0
+  flow_consistency_schedule: geometric_sqrt
+  flow_consistency_ramp_epochs: 200:1400
+  encoder_training: freeze_uni3d_and_clip_train_adapters_projections_decoder
+  act_text_align: true
+  act_text_align_lambda_max: 0.001
+  instruction_aug: true
+  instruction_bank: instruction_bank_adroit_metaworld_affogato_v2
+  point_feature_projection: pretrained
+  heatmap_gamma: 1.0
+  ata_loss: masked_feature_cosine_reconstruction
+  ata_mask_ratio: 0.3
+  mq_diversity_branch: raw
+  mq_diversity_weight: 0.01
+instruction_aug:
+  enabled: true
+  bank_path: experiments/configs/base/instruction_bank_adroit_metaworld.json
+  apply_in_train: true
+  apply_in_val: false

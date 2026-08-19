@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "r3d-policy-core"
+version = "0.1.0"
+description = "Core policy package for the R3D-based release"
+requires-python = ">=3.10,<3.11"
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["r3d*"]
+
+[tool.setuptools.package-data]
+r3d = ["config/**/*.yaml", "config/**/*.yml", "config/**/*.json"]

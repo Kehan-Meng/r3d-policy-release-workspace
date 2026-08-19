@@ -1,0 +1,21 @@
+extends: door_v5_masked_cosine.yaml
+
+experiment:
+  name: adroit_door_v5_masked_cosine_oc
+  output_dir: outputs/adroit_door_v5_masked_cosine_oc
+  results_dir: experiments/results/adroit_door_v5_masked_cosine_oc
+
+frame_adapter:
+  enabled: true
+  profile_path: R3D/r3d/config/frame_transform/adroit_door_legacy_camera_v1.yaml
+  augmentation_frame: policy
+  allow_frame_config_override: false
+  normalizer:
+    train_split_only: true
+    chunk_size: 2048
+
+report:
+  variant: oc_compmq01_tau15_rawdiv0p01_maskedcos_ata1e3
+  frame_adapter_enabled: true
+  frame_profile: adroit_door_legacy_camera_v1
+  frame_scope: pointcloud_xyz_camera_reexpression_state_action_native_passthrough

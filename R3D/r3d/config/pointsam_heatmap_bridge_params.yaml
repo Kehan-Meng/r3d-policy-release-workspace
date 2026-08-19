@@ -1,0 +1,194 @@
+# =============================================================================
+# PointSAMHeatmapBridge — R3D × pointsam_last 参数完整对照表
+# =============================================================================
+#
+# 这个文件记录了 PointSAMHeatmapBridge 的所有参数、来源和含义。
+# 配合 r3d_metaworld_pointsam_heatmap_bridge.yaml 使用。
+
+# =============================================================================
+# 1. PointSAMHeatmapBridge.__init__() 参数
+# =============================================================================
+# 这些参数通过 DP3Encoder → pointcloud_encoder_cfg 传入。
+
+pointcloud_encoder_cfg:
+
+  # ── 路径 ─────────────────────────────────────────────────────────────
+  pointsam_root: /DATA/disk0/zykh/wzy/code/pointsam_last
+    # pointsam_last 代码仓库路径
+    # 来源: 用户指定
+    # 传给: sys.path 注入, Hydra config_dir, checkpoint 查找
+
+  # ── 维度 ─────────────────────────────────────────────────────────────
+  embed_dim: 256
+    # pc_pe (PositionEmbeddingRandom) 输出维度
+    # 也是 pc_proj (Linear 1024→embed_dim) 的目标维度
+    # 内部: PositionEmbeddingRandom(embed_dim // 2) → sin+cos → embed_dim
+    # 传给: pe_layer, pc_proj, pc_embed_dim
+    # 来源: R3D config, 需与 encoder_output_dim 对齐
+
+  out_dim: 256
+    # embed_dim 的别名
+    # 传给: DP3Encoder.pc_output_dim (最终传给 diffusion head 的 token 维度)
+    # 如果为 null, 默认 = embed_dim
+
+  # ── Hydra 模型配置 ───────────────────────────────────────────────────
+  heatmap_config_name: large_heatmap_uni3d_token_similarity
+    # pointsam_last/configs/ 下的 Hydra 配置文件名 (不含 .yaml)
+    # 该文件定义了模型架构: pc_encoder, mask_decoder, text_prompt_encoder
+    # 当前默认: 使用 Uni3D-Ti + TokenSimilarityHeatmapDecoder + OpenCLIP
+
+  heatmap_config_dir: null
+    # 自定义 Hydra config 目录, null = <pointsam_root>/configs
+
+  heatmap_as_prob: true
+    # true: heatmap 返回 sigmoid(heatmap_logits), 值域 [0, 1]
+    # false: 返回原始 logits
+
+  # ── Checkpoint 加载 ──────────────────────────────────────────────────
+  load_checkpoint: false
+    # 是否加载训练好的 PointSAM 权重
+
+  checkpoint_path: null
+    # checkpoint 路径, 支持:
+    #   - .safetensors 文件
+    #   - .pt / .bin 文件 (自动提取 state_dict/model/module key)
+    #   - 目录 (自动搜索 model.safetensors / pytorch_model.bin / model.pt / checkpoint.pt)
+
+  strict_load: false
+    # true: checkpoint key 和模型 key 必须完全匹配, 否则 raise
+    # false: 允许 missing / unexpected keys
+
+  ignore_mismatched_sizes: true
+    # true: 跳过 shape 不匹配的 key (只 warn, 不报错)
+    # false: shape 不匹配也 raise
+
+  # ── Freeze 策略 ──────────────────────────────────────────────────────
+  # 优先级: freeze > freeze_uni3d > freeze_out_proj
+  # 即 freeze=true 时, freeze_uni3d 和 freeze_out_proj 被忽略
+
+  freeze: false
+    # true: 冻结 encoder + text_encoder + decoder 所有参数
+    # false: 按 freeze_uni3d / freeze_out_proj 分别控制
+
+  freeze_uni3d: true
+    # true: 冻结 Uni3D ViT backbone (visual.blocks.* 不含 MLP_Adapter/Space_Adapter)
+    #       但 E-SAM adapters (MLP_Adapter, Space_Adapter) 保持可训练
+    # false: backbone 也参与训练
+    # 仅在 freeze=false 时生效
+
+  freeze_out_proj: false
+    # true: 冻结 encoder.trans2embed (encoder 最后的输出投影层)
+    # false: trans2embed 可训练
+    # 仅在 freeze=false 时生效
+
+# =============================================================================
+# 2. pointsam_last 内部模型架构 (由 heatmap_config_name 决定)
+# =============================================================================
+# 当前默认配置: configs/model/heatmap_uni3d_token_similarity.yaml
+#
+# pc_encoder (Uni3DPointEncoderForSAM):
+#   pc_model: eva02_tiny_patch14_224    # Uni3D-Ti ViT backbone
+#   pc_feat_dim: 192                    # ViT patch embedding dim
+#   embed_dim: 1024                     # 最终输出维度 (trans2embed 后)
+#   num_group: 512                      # FPS patch 数量
+#   group_size: 64                      # 每个 patch 的 kNN 点数
+#   pc_encoder_dim: 512                 # PointNet 中间维度
+#   use_esam_adapter: true              # 启用 E-SAM adapter
+#   esam_adapter_mlp_ratio: 0.25        # adapter MLP hidden ratio
+#   esam_adapter_scale: 0.5             # adapter 残差缩放
+#
+# mask_decoder (TokenSimilarityHeatmapDecoder):
+#   pc_input_dim: 1024                  # 来自 pc_encoder 的 patch token 维度
+#   text_input_dim: 1024                # 来自 text_encoder 的 text token 维度
+#   proj_dim: 256                       # 投影后的相似度计算维度
+#   pc_ffn_ratio: 2.0                   # pc FFN 隐藏层倍数
+#   text_ffn_ratio: 2.0                 # text FFN 隐藏层倍数
+#   max_ffn_dim: 2048                   # FFN 隐藏层上限
+#   activation: gelu
+#   normalize: true                     # L2 normalize before cosine sim
+#   temperature: 0.07                   # 可学习 logit_scale 初始化
+#   interp_k: 3                         # kNN 插值 neighbor 数
+#
+# text_prompt_encoder (OpenCLIPTokenTextEncoder):
+#   model_name: EVA02-E-14-plus         # OpenCLIP 模型
+#   context_length: 77                  # 最大 text token 数
+#   freeze_clip: true                   # 冻结 CLIP 权重
+#   precision: fp32
+#   apply_text_projection: true          # 应用 CLIP text projection
+
+# =============================================================================
+# 3. 数据流维度完整对照
+# =============================================================================
+#
+# 输入:
+#   pcd [B, N, 6]           ← R3D nobs['point_cloud'] (已归一化到 [-1,1])
+#   text                     ← str | List[str] | List[List[str]]
+#
+# 编码:
+#   pts [B, N, 3] + colors [B, N, 3]
+#     → FPS → centers [B, 512, 3]
+#     → kNN → knn_idx [B, 512, 64]
+#     → PointNet + ViT → pc_raw [B, 512, 1024]
+#
+# PE:
+#   centers → _normalize → [-1,1] → pe_layer → pc_pe [B, 512, 256]
+#
+# 投影:
+#   pc_raw → pc_proj (Linear 1024→256) → pc_embeddings [B, 512, 256]
+#
+# Heatmap (可选):
+#   text → text_encoder → text_tokens [B, T, 1024]
+#   pc_raw + text_tokens → decoder:
+#     pc_ffn:              [B, 512, 1024] → [B, 512, 1024]
+#     text_ffn:            [B, T, 1024] → [B, T, 1024]
+#     interpolate:         [B, 512, 1024] → [B, N, 1024] (kNN 上采样)
+#     pc_proj:             [B, N, 1024] → [B, N, 256]
+#     text_proj:           [B, T, 1024] → [B, T, 256]
+#     cosine similarity:   [B, N, 256] @ [B, 256, T] → [B, N, T]
+#     max+mean pool:       [B, N, T] → [B, N, 2] → Linear(2,1) → [B, N, 1]
+#     transpose:           [B, N, 1] → [B, 1, N]
+#   → point_heatmap [B, N, 1]
+#   → _downsample_heatmap_to_patches:
+#     knn_idx max-pool:    [B, N, 1] → [B, 512, 1]
+#   → sigmoid (if heatmap_as_prob=true)
+#   → heatmap [B, 512, 1]
+#
+# 返回:
+#   无 heatmap:  (pc_embeddings [B, 512, 256], pc_pe [B, 512, 256])
+#   有 heatmap:  (pc_embeddings [B, 512, 256], pc_pe [B, 512, 256], heatmap [B, 512, 1])
+#
+# DP3Encoder 接入:
+#   pn_feat [B, 512, 256] + low_dim_mlps → final_feat [B, 512, D]
+#   pc_pe [B, 512, 256]
+#   heatmap [B, 512, 1]
+#
+# ACT:
+#   cross_attn(queries [B, Q, D], patch_tokens [B, 512, D])
+#     heatmap_mode=multiply:
+#       attn = softmax(scores)
+#       attn = normalize(attn * (heatmap + eps) ** heatmap_gamma)
+#     heatmap_mode=log_bias:  scores += lambda * log(heatmap)
+#   → compact_tokens [B, Q, D], compact_pc_pe [B, Q, 256]
+#
+# Diffusion Head:
+#   global_cond [B, T*Q, D], pc_pe [B, T*Q, 256]
+#   → action [B, T, action_dim]
+
+# =============================================================================
+# 4. R3D 侧需要对齐的参数
+# =============================================================================
+#
+# policy.encoder_output_dim         = embed_dim (256)
+#   # DP3Encoder 传给 vision encoder 的 out_channel
+#   # 必须等于 pointcloud_encoder_cfg.embed_dim
+#
+# policy.transformer_config.embedding_dim = 256
+#   # DiT 的 token embedding 维度
+#   # 必须等于 pc_output_dim (= embed_dim = 256)
+#
+# policy.act_config.*:
+#   # ACT compactor 接收的 token_dim = encoder_output_dim = 256
+#   # pc_pe dim 也是 256, 所以 pe_dim 如果配了也必须 = 256
+#
+# policy.pointnet_type = "pointsam_heatmap_bridge"
+#   # 告诉 DP3Encoder 使用 PointSAMHeatmapBridge

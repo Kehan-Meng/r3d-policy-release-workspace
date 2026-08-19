@@ -1,0 +1,57 @@
+#===wzy===
+# Text-to-heatmap config for Uni3D patch tokens and OpenCLIP token features.
+
+defaults:
+  - model: heatmap_uni3d_token_similarity
+  - dataset@train_dataset: affogato_heatmap
+  - dataset@val_dataset: affogato_heatmap_val
+  - loss: laso
+  - _self_
+
+# Affogato 原始点云固定为 16384 点，训练和验证均采样到 10000 点。
+num_samples: 10000
+
+train_dataloader:
+  batch_size: 64
+  num_workers: 8
+  pin_memory: True
+  prefetch_factor: 2
+  shuffle: True
+  drop_last: True
+
+val_freq: 1
+val_dataloader:
+  batch_size: 64
+  num_workers: 4
+  shuffle: False
+  drop_last: False
+
+init_lr: 5e-4
+eta_min: 1e-4
+weight_decay: 0.1
+pc_encoder_lr_ratio: 1.0
+max_grad_value: 1.0
+gradient_accumulation_steps: 1
+step_loss_log_interval: 100
+save_freq: 1
+best_checkpoint_limit: 3
+
+#===wzy===
+# Training policy. Keep it outside configs/model so model YAML only contains
+# module construction args.
+pc_encoder_train:
+  freeze_uni3d: true
+  train_esam_adapter: true
+#===wzy===
+
+pretrained_ckpt_path: ${oc.env:POINTSAM_UNI3D_CHECKPOINT,""}
+max_epochs: 100
+max_steps: 5000000
+
+run_name: affogato_adapter_twowayCA_contras
+project_name: pointsam_adapter_twowayCA_contras
+project_dir: "./logs/${run_name}"
+log_with: wandb
+wandb_mode: offline
+vis_freq: 1000
+#===wzy===

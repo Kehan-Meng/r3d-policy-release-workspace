@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pointsam-r3d"
+version = "0.1.0"
+description = "PointSAM encoder and text-guided heatmap components"
+requires-python = ">=3.10,<3.11"
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pc_sam*"]
