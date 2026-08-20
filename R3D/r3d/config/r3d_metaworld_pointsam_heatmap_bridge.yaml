@@ -113,7 +113,7 @@ policy:
   # ── PointSAMHeatmapBridge 专属参数 ──
   pointcloud_encoder_cfg:
     # ── 路径 ──
-    pointsam_root: /DATA/disk0/zykh/wzy/code/pointsam_last
+    pointsam_root: null
 
     # ── 维度 ──
     embed_dim: 256               # pc_pe 输出维度 (= pc_proj 目标维度)
@@ -125,8 +125,8 @@ policy:
     heatmap_as_prob: true        # heatmap 输出 sigmoid 为概率 [0,1]
 
     # ── Checkpoint ──
-    load_checkpoint: true
-    checkpoint_path: /DATA/disk0/zykh/wzy/code/pointsam_last/logs/affogato_heatmap_uni3d_token_similarity_0706/use/checkpoint_epoch_0027_step_00077980_iou_0.178100
+    load_checkpoint: false
+    checkpoint_path: null
     strict_load: false
     ignore_mismatched_sizes: true
 

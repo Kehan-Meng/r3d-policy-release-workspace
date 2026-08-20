@@ -271,321 +271,6 @@ class Attention(nn.Module):
         return out
 
 
-class DenseVelocityResidualReader(nn.Module):
-    """Action-conditioned read-only retrieval from pre-ACT dense point tokens."""
-
-    _INTERVENTIONS = {
-        "none",
-        "off",
-        "sample_shuffle",
-        "token_mean",
-        "feature_zero",
-        "pe_zero",
-        "all_zero",
-        "query_zero",
-    }
-
-    def __init__(
-        self,
-        *,
-        query_dim: int,
-        dense_feature_dim: int,
-        dense_pe_dim: int,
-        action_dim: int,
-        num_heads: int = 4,
-        downsample_rate: int = 4,
-        min_residual_ratio: float = 0.0,
-        max_residual_ratio: float = 0.1,
-        initial_residual_ratio: float = 1.0e-3,
-        fixed_residual_ratio: float = None,
-        scale_floor: float = 5.0e-2,
-        eps: float = 1.0e-6,
-        detach_inputs: bool = True,
-        null_subtract: bool = False,
-        interaction_subtract: bool = False,
-    ) -> None:
-        super().__init__()
-        if query_dim <= 0 or dense_feature_dim <= 0 or dense_pe_dim <= 0:
-            raise ValueError("Dense residual reader dimensions must be positive")
-        if action_dim <= 0:
-            raise ValueError("action_dim must be positive")
-        if max_residual_ratio <= 0:
-            raise ValueError("max_residual_ratio must be positive")
-        if not 0 <= min_residual_ratio < max_residual_ratio:
-            raise ValueError(
-                "min_residual_ratio must be in [0, max_residual_ratio)"
-            )
-        if not min_residual_ratio <= initial_residual_ratio < max_residual_ratio:
-            raise ValueError(
-                "initial_residual_ratio must be in "
-                "[min_residual_ratio, max_residual_ratio)"
-            )
-        if fixed_residual_ratio is not None and not (
-            0.0 <= fixed_residual_ratio <= max_residual_ratio
-        ):
-            raise ValueError(
-                "fixed_residual_ratio must be in [0, max_residual_ratio]"
-            )
-        if scale_floor < 0:
-            raise ValueError("scale_floor must be non-negative")
-
-        self.min_residual_ratio = float(min_residual_ratio)
-        self.max_residual_ratio = float(max_residual_ratio)
-        self.fixed_residual_ratio = (
-            None
-            if fixed_residual_ratio is None
-            else float(fixed_residual_ratio)
-        )
-        self.scale_floor = float(scale_floor)
-        self.eps = float(eps)
-        self.detach_inputs = bool(detach_inputs)
-        self.null_subtract = bool(null_subtract)
-        self.interaction_subtract = bool(interaction_subtract)
-
-        self.dense_feature_proj = (
-            nn.Identity()
-            if dense_feature_dim == query_dim
-            else nn.Linear(dense_feature_dim, query_dim)
-        )
-        self.dense_pe_proj = (
-            nn.Identity()
-            if dense_pe_dim == query_dim
-            else nn.Linear(dense_pe_dim, query_dim, bias=False)
-        )
-        self.cross_attn = Attention(
-            embedding_dim=query_dim,
-            num_heads=num_heads,
-            downsample_rate=downsample_rate,
-        )
-        self.query_norm = nn.LayerNorm(query_dim)
-        self.residual_norm = nn.LayerNorm(query_dim)
-        self.velocity_head = nn.Linear(query_dim, action_dim)
-        # Runtime-only diagnostic control. This is intentionally not a
-        # parameter or buffer, so checkpoint compatibility is unchanged.
-        self.default_intervention = "none"
-
-        if self.min_residual_ratio == 0.0:
-            normalized_initial = initial_residual_ratio / max_residual_ratio
-            gate_init = (
-                math.atanh(normalized_initial) if normalized_initial > 0 else 0.0
-            )
-        else:
-            span = self.max_residual_ratio - self.min_residual_ratio
-            normalized_initial = (initial_residual_ratio - self.min_residual_ratio) / span
-            normalized_initial = min(max(normalized_initial, 1.0e-6), 1.0 - 1.0e-6)
-            gate_init = math.log(normalized_initial / (1.0 - normalized_initial))
-        self.gate_logit = nn.Parameter(torch.tensor(gate_init, dtype=torch.float32))
-        self.last_debug = {}
-
-    @staticmethod
-    def _sample_rms(value: Tensor) -> Tensor:
-        dims = tuple(range(1, value.ndim))
-        return value.square().mean(dim=dims, keepdim=True).sqrt()
-
-    def effective_residual_ratio(self) -> Tensor:
-        if self.fixed_residual_ratio is not None:
-            return self.gate_logit.new_tensor(self.fixed_residual_ratio)
-        if self.min_residual_ratio > 0.0:
-            span = self.max_residual_ratio - self.min_residual_ratio
-            return self.min_residual_ratio + span * torch.sigmoid(self.gate_logit)
-        return self.max_residual_ratio * torch.tanh(self.gate_logit)
-
-    def _read_dense(
-        self,
-        query: Tensor,
-        dense_features: Tensor,
-        dense_pe: Tensor,
-        dense_temporal_pe: Tensor,
-    ):
-        dense_value = self.dense_feature_proj(dense_features)
-        dense_key = dense_value + self.dense_pe_proj(dense_pe)
-        if dense_temporal_pe is not None:
-            if dense_temporal_pe.shape != dense_key.shape:
-                raise ValueError(
-                    "dense_temporal_pe must match projected dense key shape, got "
-                    f"{tuple(dense_temporal_pe.shape)} and {tuple(dense_key.shape)}"
-                )
-            dense_key = dense_key + dense_temporal_pe
-        return self.cross_attn(
-            q=query,
-            k=dense_key,
-            v=dense_value,
-            return_attention=True,
-        )
-
-    def _intervene(self, dense_features: Tensor, dense_pe: Tensor, mode: str):
-        if mode not in self._INTERVENTIONS:
-            raise ValueError(
-                f"dense intervention must be one of {sorted(self._INTERVENTIONS)}, "
-                f"got {mode!r}"
-            )
-        if mode == "sample_shuffle" and dense_features.shape[0] > 1:
-            permutation = torch.roll(
-                torch.arange(dense_features.shape[0], device=dense_features.device),
-                shifts=1,
-            )
-            dense_features = dense_features.index_select(0, permutation)
-            dense_pe = dense_pe.index_select(0, permutation)
-        elif mode == "token_mean":
-            dense_features = dense_features.mean(dim=1, keepdim=True).expand_as(
-                dense_features
-            )
-        elif mode == "feature_zero":
-            dense_features = torch.zeros_like(dense_features)
-        elif mode == "pe_zero":
-            dense_pe = torch.zeros_like(dense_pe)
-        elif mode == "all_zero":
-            dense_features = torch.zeros_like(dense_features)
-            dense_pe = torch.zeros_like(dense_pe)
-        return dense_features, dense_pe
-
-    def forward(
-        self,
-        query_hidden: Tensor,
-        dense_features: Tensor,
-        dense_pe: Tensor,
-        base_velocity: Tensor,
-        *,
-        dense_temporal_pe: Tensor = None,
-        intervention: str = None,
-    ) -> Tensor:
-        intervention = (
-            self.default_intervention if intervention is None else intervention
-        )
-        if query_hidden.ndim != 3 or dense_features.ndim != 3 or dense_pe.ndim != 3:
-            raise ValueError("Dense reader inputs must all be rank-3 tensors")
-        if dense_features.shape[:2] != dense_pe.shape[:2]:
-            raise ValueError("dense_features and dense_pe must share [B, N]")
-        if query_hidden.shape[0] != dense_features.shape[0]:
-            raise ValueError("query and dense features must share batch size")
-        if base_velocity.shape[:2] != query_hidden.shape[:2]:
-            raise ValueError("base_velocity and query_hidden must share [B, H]")
-
-        dense_features, dense_pe = self._intervene(
-            dense_features, dense_pe, intervention
-        )
-        if intervention == "off":
-            self.last_debug = {
-                "intervention": intervention,
-                "effective_residual_ratio": 0.0,
-            }
-            return torch.zeros_like(base_velocity)
-        if intervention == "query_zero":
-            # In interaction-only mode, removing q analytically makes the
-            # inclusion-exclusion residual exactly zero. Short-circuit here
-            # so BF16 cancellation noise cannot be RMS-amplified.
-            if self.interaction_subtract:
-                self.last_debug = {
-                    "intervention": intervention,
-                    "effective_residual_ratio": 0.0,
-                    "actual_residual_ratio": 0.0,
-                }
-                return torch.zeros_like(base_velocity)
-            query_hidden = torch.zeros_like(query_hidden)
-
-        if self.detach_inputs:
-            query_hidden = query_hidden.detach()
-            dense_features = dense_features.detach()
-            dense_pe = dense_pe.detach()
-            if dense_temporal_pe is not None:
-                dense_temporal_pe = dense_temporal_pe.detach()
-
-        query = self.query_norm(query_hidden)
-        retrieved, attention = self._read_dense(
-            query,
-            dense_features,
-            dense_pe,
-            dense_temporal_pe,
-        )
-        raw_residual = self.velocity_head(self.residual_norm(retrieved))
-        null_residual_rms = torch.zeros((), device=raw_residual.device)
-        if self.interaction_subtract:
-            zero_features = torch.zeros_like(dense_features)
-            zero_pe = torch.zeros_like(dense_pe)
-            zero_query = self.query_norm(torch.zeros_like(query_hidden))
-            query_null_retrieved, _ = self._read_dense(
-                query,
-                zero_features,
-                zero_pe,
-                dense_temporal_pe,
-            )
-            zero_query_retrieved, _ = self._read_dense(
-                zero_query,
-                dense_features,
-                dense_pe,
-                dense_temporal_pe,
-            )
-            all_null_retrieved, _ = self._read_dense(
-                zero_query,
-                zero_features,
-                zero_pe,
-                dense_temporal_pe,
-            )
-            query_null_residual = self.velocity_head(
-                self.residual_norm(query_null_retrieved)
-            )
-            zero_query_residual = self.velocity_head(
-                self.residual_norm(zero_query_retrieved)
-            )
-            all_null_residual = self.velocity_head(
-                self.residual_norm(all_null_retrieved)
-            )
-            null_residual_rms = self._sample_rms(
-                query_null_residual.detach()
-            ).mean()
-            raw_residual = (
-                raw_residual
-                - query_null_residual
-                - zero_query_residual
-                + all_null_residual
-            )
-        elif self.null_subtract:
-            null_retrieved, _null_attention = self._read_dense(
-                query,
-                torch.zeros_like(dense_features),
-                torch.zeros_like(dense_pe),
-                dense_temporal_pe,
-            )
-            null_residual = self.velocity_head(
-                self.residual_norm(null_retrieved)
-            )
-            null_residual_rms = self._sample_rms(null_residual.detach()).mean()
-            raw_residual = raw_residual - null_residual
-
-        base_rms = self._sample_rms(base_velocity.detach()).clamp_min(
-            self.scale_floor
-        )
-        residual_rms = self._sample_rms(raw_residual.detach())
-        residual_is_active = residual_rms > self.eps
-        normalized_residual = raw_residual * (
-            base_rms / residual_rms.clamp_min(self.eps)
-        ) * residual_is_active.to(
-            dtype=raw_residual.dtype
-        )
-        ratio = self.effective_residual_ratio().to(
-            device=raw_residual.device, dtype=raw_residual.dtype
-        )
-        velocity_residual = ratio * normalized_residual
-
-        attention_prob = attention.detach().clamp_min(self.eps)
-        attention_entropy = -(
-            attention_prob * attention_prob.log()
-        ).sum(dim=-1).mean()
-        actual_ratio = self._sample_rms(velocity_residual.detach()) / (
-            base_rms + self.eps
-        )
-        self.last_debug = {
-            "intervention": intervention,
-            "effective_residual_ratio": float(ratio.detach().item()),
-            "base_velocity_rms": float(base_rms.mean().item()),
-            "raw_residual_rms": float(residual_rms.mean().item()),
-            "null_residual_rms": float(null_residual_rms.item()),
-            "null_subtract": float(self.null_subtract),
-            "interaction_subtract": float(self.interaction_subtract),
-            "actual_residual_ratio": float(actual_ratio.mean().item()),
-            "attention_entropy": float(attention_entropy.item()),
-        }
-        return velocity_residual
 
 
 # https://github.com/facebookresearch/segment-anything/blob/6fdee8f2727f4506cfbbe553e23b895e27956588/segment_anything/modeling/common.py#L13
@@ -759,7 +444,6 @@ class ConditionalUnet1D(nn.Module):
         pe_type='learnable',  # 'learnable' or 'sinusoidal'
         use_target_ee = False,
         cat_on_token=False,
-        dense_residual_reader=None,
         ):
         super().__init__()
         self.cat_on_token = cat_on_token
@@ -871,7 +555,6 @@ class ConditionalUnet1D(nn.Module):
         self.output_proj = None
         self.temporal_pe_obs = None
         self.temporal_pe_horizon = None
-        self.dense_residual_reader = None
         
         if condition_type == 'one_way_transformer':
             if transformer_config is None:
@@ -928,25 +611,6 @@ class ConditionalUnet1D(nn.Module):
             else:
                 raise ValueError(f"pe_type must be 'learnable' or 'sinusoidal', got {pe_type}")
 
-            dense_reader_config = dict(dense_residual_reader or {})
-            if dense_reader_config.pop("enabled", False):
-                if self.use_target_ee:
-                    raise NotImplementedError(
-                        "Dense residual reader does not yet support use_target_ee=True"
-                    )
-                dense_feature_dim = dense_reader_config.pop("dense_feature_dim")
-                dense_pe_dim = dense_reader_config.pop("dense_pe_dim")
-                self.dense_residual_reader = DenseVelocityResidualReader(
-                    query_dim=embedding_dim,
-                    dense_feature_dim=dense_feature_dim,
-                    dense_pe_dim=dense_pe_dim,
-                    action_dim=input_dim,
-                    **dense_reader_config,
-                )
-            elif dense_reader_config:
-                unknown = ", ".join(sorted(dense_reader_config))
-                logger.debug("Ignoring disabled dense residual reader config: %s", unknown)
-
         logger.info(
             "number of parameters: %e", sum(p.numel() for p in self.parameters())
         )
@@ -974,8 +638,7 @@ class ConditionalUnet1D(nn.Module):
             sample: torch.Tensor, 
             timestep: Union[torch.Tensor, float, int], 
             local_cond=None, global_cond=None, pc_pe=None, n_obs_steps=None,
-            dense_cond=None, dense_pe=None,
-            dense_residual_intervention=None, **kwargs):
+            **kwargs):
         """
         x: (B,T,input_dim)
         timestep: (B,) or int, diffusion step
@@ -1116,31 +779,7 @@ class ConditionalUnet1D(nn.Module):
                 
                 output = torch.cat([joint_pred, ee_pred], dim=-1)  # [B, horizon, 28]
             else:
-                base_velocity = self.output_proj(output)
-                if self.dense_residual_reader is not None:
-                    if dense_cond is None or dense_pe is None:
-                        raise RuntimeError(
-                            "Dense residual reader is enabled but dense_cond/dense_pe "
-                            "were not provided"
-                        )
-                    if dense_cond.shape[1] % n_obs_steps != 0:
-                        raise ValueError(
-                            "dense token count must be divisible by n_obs_steps"
-                        )
-                    dense_tokens_per_step = dense_cond.shape[1] // n_obs_steps
-                    dense_temporal_pe = temporal_pe_obs_slice.repeat_interleave(
-                        dense_tokens_per_step, dim=1
-                    )
-                    velocity_residual = self.dense_residual_reader(
-                        query_hidden=output,
-                        dense_features=dense_cond,
-                        dense_pe=dense_pe,
-                        dense_temporal_pe=dense_temporal_pe,
-                        base_velocity=base_velocity,
-                        intervention=dense_residual_intervention,
-                    )
-                    base_velocity = base_velocity + velocity_residual
-                output = base_velocity
+                output = self.output_proj(output)
             
             # # Project back to action_dim
             # output = self.output_proj(output)  # [B, horizon, action_dim]

@@ -1,12 +1,9 @@
 """Small geometry helpers used by the heatmap decoder."""
 
-#===wzy===
 import dataclasses
-#===wzy===
 import torch
 
 
-#===wzy===
 @dataclasses.dataclass
 class AuxInputs:
     coords: torch.Tensor
@@ -18,7 +15,6 @@ class AuxInputs:
     pc_cls: torch.Tensor = None
     text_eot: torch.Tensor = None
     text_valid_mask: torch.Tensor = None
-#===wzy===
 
 
 def knn_points(

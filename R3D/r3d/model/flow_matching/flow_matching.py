@@ -34,8 +34,6 @@ def compute_consistency_flow_matching_loss(
         local_cond=None,
         global_cond=None,
         pc_pe=None,
-        dense_cond=None,
-        dense_pe=None,
         n_obs_steps=None,
         eps=1e-2,
         delta=1e-2,
@@ -102,8 +100,6 @@ def compute_consistency_flow_matching_loss(
         local_cond=local_cond,
         global_cond=global_cond,
         pc_pe=pc_pe,
-        dense_cond=dense_cond,
-        dense_pe=dense_pe,
         n_obs_steps=n_obs_steps,
     )
     vr_kwargs = dict(
@@ -112,8 +108,6 @@ def compute_consistency_flow_matching_loss(
         local_cond=local_cond,
         global_cond=global_cond,
         pc_pe=pc_pe,
-        dense_cond=dense_cond,
-        dense_pe=dense_pe,
         n_obs_steps=n_obs_steps,
     )
     if stop_gradient_target:
@@ -280,8 +274,6 @@ def flow_ode_sample(
         local_cond=None,
         global_cond=None,
         pc_pe=None,
-        dense_cond=None,
-        dense_pe=None,
         n_obs_steps=None,
         eps=1e-2,
         num_inference_steps=1,
@@ -327,8 +319,6 @@ def flow_ode_sample(
             local_cond=local_cond,
             global_cond=global_cond,
             pc_pe=pc_pe,
-            dense_cond=dense_cond,
-            dense_pe=dense_pe,
             n_obs_steps=n_obs_steps,
         )
 

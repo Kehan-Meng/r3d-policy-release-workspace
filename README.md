@@ -19,7 +19,7 @@ Planned top-level components:
 
 The first migration slice is in place:
 
-- public `train_experiment.py` and `eval_experiment.py` entry points;
+- public `train.py` and `eval.py` entry points;
 - the R3D policy core used by the current V5 model;
 - the PointSAM two-way cross-attention encoder package;
 - package metadata for editable installs;
@@ -56,14 +56,14 @@ Large checkpoints are never committed. Place downloaded weights under
 Inspect a generated training command without starting a process:
 
 ```bash
-python train_experiment.py \
+python train.py \
   --config experiments/configs/adroit/door_v5_masked_cosine.yaml
 ```
 
 Start training by adding `--execute`. Evaluation uses the same config:
 
 ```bash
-python eval_experiment.py \
+python eval.py \
   --config experiments/configs/adroit/door_v5_masked_cosine.yaml \
   --checkpoint outputs/adroit_door_v5_masked_cosine/checkpoints/EPOCH.ckpt \
   --eval-episodes 100 \
@@ -90,6 +90,6 @@ point-cloud padding through translated camera transforms.
 Use the OC Door example with:
 
 ```bash
-python train_experiment.py \
+python train.py \
   --config experiments/configs/adroit/door_v5_masked_cosine_oc.yaml
 ```

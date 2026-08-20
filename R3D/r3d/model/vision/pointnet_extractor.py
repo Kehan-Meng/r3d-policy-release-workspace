@@ -6,11 +6,23 @@ import os
 import sys
 import importlib
 import inspect
+import pathlib
 import numpy as np
 
 from pytorch3d.ops import sample_farthest_points
 from typing import Optional, Dict, Tuple, Union, List, Type
 from termcolor import cprint
+
+
+def _installed_pointsam_root() -> str:
+    """Return the root of the installed editable or wheel PointSAM package."""
+    try:
+        import pc_sam
+    except ImportError as exc:
+        raise ImportError(
+            "PointSAM is not installed. Run `pip install -e ./PointSAM`."
+        ) from exc
+    return str(pathlib.Path(pc_sam.__file__).resolve().parent.parent)
 
 
 def create_mlp(
@@ -379,8 +391,7 @@ class DP3Encoder(nn.Module):
             eval=False,
             text=None,
             return_heatmap=False,
-            return_pc_embedding=False,
-            return_point_centers=False) -> torch.Tensor:
+            return_pc_embedding=False) -> torch.Tensor:
         points = observations[self.point_cloud_key]
         assert len(points.shape) == 3, cprint(f"point cloud shape: {points.shape}, length should be 3", "red")
         if self.use_imagined_robot:
@@ -396,19 +407,11 @@ class DP3Encoder(nn.Module):
 
         if not self.pc_encoder_extract_global_feature:
             if return_heatmap:
-                kwargs = {"text": text, "return_heatmap": True}
-                if return_point_centers:
-                    kwargs["return_centers"] = True
-                encoder_result = self.extractor(points, eval, **kwargs)
-                pn_feat, pc_pe, heatmap = encoder_result[:3]
-                point_centers = encoder_result[3] if return_point_centers else None
-            else:
-                encoder_result = (
-                    self.extractor(points, eval, return_centers=True)
-                    if return_point_centers else self.extractor(points, eval)
+                pn_feat, pc_pe, heatmap = self.extractor(
+                    points, eval, text=text, return_heatmap=True
                 )
-                pn_feat, pc_pe = encoder_result[:2]
-                point_centers = encoder_result[2] if return_point_centers else None
+            else:
+                pn_feat, pc_pe = self.extractor(points, eval)
                 heatmap = None
         else:
             pn_feat = self.extractor(points, eval)
@@ -418,18 +421,10 @@ class DP3Encoder(nn.Module):
         if not self.pc_encoder_extract_global_feature:
             if return_heatmap:
                 if return_pc_embedding:
-                    if return_point_centers:
-                        return final_feat, pc_pe, heatmap, pn_feat, point_centers
                     return final_feat, pc_pe, heatmap, pn_feat
-                if return_point_centers:
-                    return final_feat, pc_pe, heatmap, point_centers
                 return final_feat, pc_pe, heatmap
             if return_pc_embedding:
-                if return_point_centers:
-                    return final_feat, pc_pe, pn_feat, point_centers
                 return final_feat, pc_pe, pn_feat
-            if return_point_centers:
-                return final_feat, pc_pe, point_centers
             return final_feat, pc_pe
         return final_feat
 
@@ -850,7 +845,7 @@ class PointSAMPointcloudEncoderV2(nn.Module):
     }
 
     def __init__(self,
-                 pointsam_root='/DATA/disk0/zykh/wzy/code/Point-SAM',
+                 pointsam_root=None,
                  pointsam_builder='build_uni3d_b_encoder_for_sam',
                  embed_dim=256,
                  out_dim=None,
@@ -915,6 +910,9 @@ class PointSAMPointcloudEncoderV2(nn.Module):
                     for module_name in list(sys.modules.keys()):
                         if module_name == 'pc_sam' or module_name.startswith('pc_sam.'):
                             del sys.modules[module_name]
+
+        else:
+            pointsam_root = _installed_pointsam_root()
 
         if use_heatmap_model:
             self._build_heatmap_model(
@@ -1358,7 +1356,7 @@ class PointSAMPointcloudEncoder(PointSAMPointcloudEncoderV2):
 
     def __init__(
             self,
-            pointsam_root='/DATA/disk0/zykh/wzy/code/Point-SAM',
+            pointsam_root=None,
             pointsam_builder='build_uni3d_b_encoder_for_sam',
             embed_dim=256,
             out_dim=None,
@@ -1426,7 +1424,7 @@ class PointSAMHeatmapPointcloudEncoder(nn.Module):
 
     def __init__(
             self,
-            pointsam_root='/DATA/disk0/zykh/wzy/code/pointsam',
+            pointsam_root=None,
             pointsam_builder='build_uni3d_ti_encoder_for_sam',
             embed_dim=256,
             out_dim=None,
@@ -1527,6 +1525,8 @@ class PointSAMHeatmapPointcloudEncoder(nn.Module):
         """
         R3D 工程能够直接导入pc_sam.*
         """
+        if not pointsam_root:
+            return _installed_pointsam_root()
         pointsam_root = os.path.abspath(os.path.expanduser(pointsam_root))
         extra_paths = [
             pointsam_root,

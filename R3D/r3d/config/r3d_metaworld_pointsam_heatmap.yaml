@@ -114,13 +114,13 @@ policy:
     mlp_ratio: 4.0
 
   pointcloud_encoder_cfg:
-    pointsam_root: /DATA/disk0/zykh/wzy/code/pointsam
+    pointsam_root: null
     pointsam_builder: build_uni3d_ti_encoder_for_sam
     embed_dim: 256
     out_dim: 256
 
     heatmap_model_variant: simple
-    heatmap_config_dir: /DATA/disk0/zykh/wzy/code/pointsam/configs
+    heatmap_config_dir: PointSAM/configs
     heatmap_config_name: null
     heatmap_as_prob: true
 
@@ -130,8 +130,8 @@ policy:
     drop_path_rate: 0.2
     pc_encoder_dim: 512
 
-    load_encoder_checkpoint: true
-    encoder_checkpoint_path: /DATA/disk0/zykh/wzy/checkpoints/pretrained/uni3d-ti/model.pt
+    load_encoder_checkpoint: false
+    encoder_checkpoint_path: null
     load_pointsam_checkpoint: false
     pointsam_checkpoint_path: null
 

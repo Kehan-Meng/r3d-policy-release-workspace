@@ -3,7 +3,6 @@ from .mq_diversity import (
     add_mq_diversity_loss,
     cosine_orthogonality_loss,
     cosine_orthogonality_stats,
-    project_flow_readable_mq,
 )
 
 __all__ = [
@@ -11,5 +10,4 @@ __all__ = [
     "add_mq_diversity_loss",
     "cosine_orthogonality_loss",
     "cosine_orthogonality_stats",
-    "project_flow_readable_mq",
 ]

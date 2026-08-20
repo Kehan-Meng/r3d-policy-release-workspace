@@ -1,9 +1,7 @@
 # Heatmap Loss 配置
 # BCEWithLogits + Dice + 256 维 CLS/EOT contrastive loss。
 
-#===wzy===
 _target_: pc_sam.utils.loss.BCEDiceHeatmapLoss
-#===wzy===
 bce_loss_weight: 1.0
 dice_loss_weight: 1.0
 dice_scale: 1000.0

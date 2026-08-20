@@ -437,4 +437,3 @@ class OpenCLIPTokenTextEncoder(nn.Module):
         if self.cache_frozen_features and self.cache_max_entries > 0:
             return self._forward_cached(flat_texts, device, dtype, return_eot)
         return self._forward_uncached(flat_texts, device, dtype, return_eot)
-#===wzy===

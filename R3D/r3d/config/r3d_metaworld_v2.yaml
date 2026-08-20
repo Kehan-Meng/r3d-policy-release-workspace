@@ -117,7 +117,7 @@ policy:
 
   pointcloud_encoder_cfg:
     encoder_variant: v2
-    pointsam_root: /DATA/disk0/zykh/wzy/code/pointsam
+    pointsam_root: null
     pointsam_builder: build_uni3d_b_encoder_for_sam
     embed_dim: 256
     out_dim: 256
@@ -126,13 +126,13 @@ policy:
     patch_dropout: 0
     drop_path_rate: 0.2
     pc_encoder_dim: 512
-    use_pretrained_weights: true
-    pretrained_weights_path: /DATA/disk0/zykh/wzy/code/pointsam/logs/affogato_heatmap_v2/best_checkpoints/checkpoint_epoch_0017_step_00050130_iou_0.182878/model.safetensors
+    use_pretrained_weights: false
+    pretrained_weights_path: null
     checkpoint_key_prefix: "pc_encoder."
     use_heatmap_model: true
-    heatmap_config_dir: /DATA/disk0/zykh/wzy/code/pointsam/configs
+    heatmap_config_dir: PointSAM/configs
     heatmap_config_name: large_heatmap_v2
-    heatmap_checkpoint_path: /DATA/disk0/zykh/wzy/code/pointsam/logs/affogato_heatmap_v2/best_checkpoints/checkpoint_epoch_0017_step_00050130_iou_0.182878/model.safetensors
+    heatmap_checkpoint_path: null
     heatmap_as_prob: true
     strict_load: false
     ignore_mismatched_sizes: true

@@ -3,11 +3,11 @@ name: robotwin2_pair_pick_place
 task_entries: &task_entries
   - task_name: move_playingcard_away
     setting: demo_clean
-    zarr_path: /DATA/disk0/zykh/wzy/code/R3D-Policy/R3D/data/robotwin2_demo20/move_playingcard_away-demo_clean-20-seed0.zarr
+    zarr_path: R3D/data/robotwin2_demo20/move_playingcard_away-demo_clean-20-seed0.zarr
     text_command: move_playingcard_away
   - task_name: place_shoe
     setting: demo_clean
-    zarr_path: /DATA/disk0/zykh/wzy/code/R3D-Policy/R3D/data/robotwin2_demo20/place_shoe-demo_clean-20-seed0.zarr
+    zarr_path: R3D/data/robotwin2_demo20/place_shoe-demo_clean-20-seed0.zarr
     text_command: place_shoe
 
 shape_meta: &shape_meta
@@ -61,6 +61,6 @@ dataset:
   contrast_range: ${data_augmentation.contrast_range}
   saturation_range: ${data_augmentation.saturation_range}
   use_target_ee: ${policy.use_target_ee}
-  text_json_path: /DATA/disk0/zykh/wzy/code/R3D-Policy/R3D/data/text.json
+  text_json_path: R3D/data/text.json
   return_text: ${policy.use_text}
   strict_text_lookup: false

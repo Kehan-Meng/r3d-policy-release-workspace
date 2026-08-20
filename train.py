@@ -67,6 +67,21 @@ def build_train_command(cfg):
     task = cfg.task
     data = cfg.data
     policy = cfg.policy
+    removed_options = []
+    for key in ("mq_spatial_scope", "mq_common_gradient_deflation"):
+        if policy.act.get(key) is not None:
+            removed_options.append(f"policy.act.{key}")
+    if policy.get("dense_residual_reader") is not None:
+        removed_options.append("policy.dense_residual_reader")
+    mq_diversity = policy.get("mq_diversity")
+    if mq_diversity is not None and mq_diversity.get("flow") is not None:
+        removed_options.append("policy.mq_diversity.flow")
+    if removed_options:
+        raise ValueError(
+            "Removed MQ experiment options are not supported: "
+            + ", ".join(removed_options)
+            + ". Keep competitive MQ and policy.mq_diversity.raw only."
+        )
     performance = cfg.get("performance", {})
     is_multitask = (
         "multitask" in str(cfg.hydra.get("config_name", ""))
@@ -102,7 +117,6 @@ def build_train_command(cfg):
         f"checkpoint.save_ckpt={bool_str(train.save_ckpt)}",
         *([f"++task.env_runner.num_points={task.num_points}"] if (
             not str(task.get("config", "")).startswith("adroit")
-            and task.get("config") != "robotwin2_ee_camera_canary"
         ) else []),
         f"task.shape_meta.obs.point_cloud.shape=[{task.num_points},6]",
         f"policy.use_text={bool_str(policy.use_text)}",
@@ -180,14 +194,13 @@ def build_train_command(cfg):
         ):
             overrides.append("++" + item)
 
-    has_env_runner = task.get("config") != "robotwin2_ee_camera_canary"
-    if task_setting is not None and has_env_runner:
+    if task_setting is not None:
         overrides.extend([
             f"setting={task_setting}",
             f"task.env_runner.task_config={task_setting}",
         ])
 
-    if instruction_type is not None and has_env_runner:
+    if instruction_type is not None:
         overrides.append(f"task.env_runner.instruction_type={instruction_type}")
 
     if policy.get("pointnet_type") is not None:
@@ -225,18 +238,6 @@ def build_train_command(cfg):
                 f"++policy.act_config.{key}={hydra_value(policy.act.get(key))}"
             )
 
-    if policy.act.get("mq_spatial_scope") is not None:
-        overrides.extend(_build_nested_overrides(
-            "++policy.act_config.mq_spatial_scope",
-            policy.act.mq_spatial_scope,
-        ))
-
-    if policy.act.get("mq_common_gradient_deflation") is not None:
-        overrides.extend(_build_nested_overrides(
-            "++policy.act_config.mq_common_gradient_deflation",
-            policy.act.mq_common_gradient_deflation,
-        ))
-
     if policy.get("use_act_text_align") is not None:
         overrides.append(f"policy.use_act_text_align={bool_str(policy.use_act_text_align)}")
     if policy.get("act_text_align_config") is not None:
@@ -247,11 +248,6 @@ def build_train_command(cfg):
     if policy.get("mq_diversity") is not None:
         overrides.extend(_build_nested_overrides(
             "++policy.mq_diversity", policy.mq_diversity
-        ))
-
-    if policy.get("dense_residual_reader") is not None:
-        overrides.extend(_build_nested_overrides(
-            "++policy.dense_residual_reader", policy.dense_residual_reader
         ))
 
     if policy.get("pointsam_checkpoint") is not None:

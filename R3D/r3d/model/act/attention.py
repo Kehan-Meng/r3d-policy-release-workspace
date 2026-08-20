@@ -4,30 +4,6 @@ import torch
 import torch.nn as nn
 
 
-def scale_attention_bias(
-    scores,
-    bias,
-    *,
-    mode="absolute",
-    strength=1.0,
-    relative_rho=0.0,
-    eps=1e-6,
-):
-    """Scale [B,Q,N] bias with one detached scalar for the whole Cross2 batch."""
-    if mode == "absolute":
-        scale = scores.new_tensor(float(strength))
-    elif mode == "relative_rms":
-        score_rms = scores.float().square().mean().sqrt().detach()
-        bias_rms = bias.float().square().mean().sqrt().detach()
-        scale = (float(relative_rho) * score_rms / (bias_rms + eps)).to(scores.dtype)
-    else:
-        raise ValueError(
-            "attention bias mode must be 'absolute' or 'relative_rms', got "
-            f"{mode!r}"
-        )
-    return scale * bias.to(scores.dtype), scale
-
-
 class HeatmapGuidedCrossAttention(nn.Module):
     """Batch-first cross-attention with optional heatmap modulation."""
 
@@ -150,9 +126,7 @@ class HeatmapGuidedCrossAttention(nn.Module):
 
     def forward(
         self, queries, context, heatmap=None, heatmap_mode=None,
-        log_bias_lambda=None, attention_bias=None, attention_bias_mode="absolute",
-        attention_bias_strength=1.0, attention_bias_relative_rho=0.0,
-        return_score_debug=False,
+        log_bias_lambda=None,
     ):
         """
         Args:
@@ -191,7 +165,6 @@ class HeatmapGuidedCrossAttention(nn.Module):
         v = self._reshape_heads(self.v_proj(context))
 
         scores = torch.matmul(q, k.transpose(-2, -1)) * self.scale
-        original_scores = scores
         mode = self._resolve_heatmap_mode(heatmap_mode)
 
         formatted_heatmap = None
@@ -207,28 +180,6 @@ class HeatmapGuidedCrossAttention(nn.Module):
             scores = scores + lambda_ * torch.log(
                 formatted_heatmap.clamp_min(self.eps)
             )
-
-        if attention_bias is not None:
-            if not self.competitive:
-                raise ValueError("attention_bias is only supported for competitive attention")
-            if attention_bias.ndim != 3 or attention_bias.shape != scores.shape[:1] + scores.shape[2:]:
-                raise ValueError(
-                    "attention_bias must have shape [B,Q,N], got "
-                    f"{tuple(attention_bias.shape)} for scores {tuple(scores.shape)}"
-                )
-            bias = attention_bias.to(scores.dtype)
-            applied_bias, bias_scale = scale_attention_bias(
-                scores,
-                bias,
-                mode=attention_bias_mode,
-                strength=attention_bias_strength,
-                relative_rho=attention_bias_relative_rho,
-                eps=self.eps,
-            )
-            scores = scores + applied_bias.unsqueeze(1)
-        else:
-            bias_scale = None
-            applied_bias = None
 
         if self.competitive:
             # ── Competitive MQ Assignment ──
@@ -256,16 +207,4 @@ class HeatmapGuidedCrossAttention(nn.Module):
         )
         output = self.out_proj(output)
         output = self.out_drop(output)
-        if return_score_debug:
-            debug = {
-                "original_scores": original_scores.detach(),
-                "scores_after_bias": scores.detach(),
-            }
-            if applied_bias is not None:
-                debug.update({
-                    "attention_bias_mode": attention_bias_mode,
-                    "attention_bias_scale": bias_scale.detach(),
-                    "applied_attention_bias": applied_bias.detach(),
-                })
-            return output, attn, debug
         return output, attn

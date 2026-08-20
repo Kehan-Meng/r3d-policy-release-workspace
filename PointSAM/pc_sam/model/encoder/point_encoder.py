@@ -166,7 +166,6 @@ class Encoder(nn.Module):
         return feature_global.reshape(bs, g, self.encoder_channel)
 
 
-#wzy
 class Adapter(nn.Module):
     """E-SAM adapter MLP."""
 
@@ -187,15 +186,12 @@ class Adapter(nn.Module):
         else:
             x = xs
         return x
-#wzy
 
 
 class PointcloudEncoder(nn.Module):
     def __init__(self, point_transformer, args):
         super().__init__()
-        #===wzy===
         # args is a SimpleNamespace in Uni3DPointEncoderForSAM; EasyDict is unused.
-        #===wzy===
         self.trans_dim = args.pc_feat_dim # 768
         self.embed_dim = args.embed_dim # 512
         self.group_size = args.group_size # 32
@@ -223,7 +219,6 @@ class PointcloudEncoder(nn.Module):
         self.patch_dropout = PatchDropout(args.patch_dropout) if args.patch_dropout > 0. else nn.Identity()
         self.visual = point_transformer
 
-        #wzy
         self.use_esam_adapter = getattr(args, "use_esam_adapter", False)
         if self.use_esam_adapter:
             esam_adapter_mlp_ratio = getattr(args, "esam_adapter_mlp_ratio", 0.25)
@@ -240,7 +235,6 @@ class PointcloudEncoder(nn.Module):
                     skip_connect=True,
                 )
                 blk.esam_adapter_scale = esam_adapter_scale
-        #wzy
 
 
     def forward(self, pts, colors):
@@ -288,7 +282,6 @@ class PointcloudEncoder(nn.Module):
         x = self.visual.pos_drop(x)
 
         # ModuleList not support forward
-        #wzy
         for i, blk in enumerate(self.visual.blocks):
             if self.use_esam_adapter:
                 attn_out = blk.attn(blk.norm1(x))
@@ -306,35 +299,28 @@ class PointcloudEncoder(nn.Module):
                 )
             else:
                 x = blk(x)
-        #wzy
         # Preserve the ViT CLS embedding in the same way as original Uni3D,
         # while keeping all patch tokens for dense heatmap prediction.
         cls_embedding = self.visual.norm(x[:, 0, :])
         cls_embedding = self.visual.fc_norm(cls_embedding)
         cls_embedding = self.trans2embed(cls_embedding)  # [B, embed_dim]
 
-        #===wzy===
         x = self.visual.norm(x[:, 1:, :])
-        #===wzy===
         x = self.visual.fc_norm(x)
         x = self.trans2embed(x)
-        #===wzy===
         patches = {
             "centers": center,
             "knn_idx": knn_idx,
             "cls_embedding": cls_embedding,
         }
         return x, patches
-        #===wzy===
 
 
-#===wzy===
 class Uni3DPointEncoderForSAM(PointcloudEncoder):
     """Concrete Uni3D point encoder class used directly by Hydra configs."""
 
     def __init__(
         self,
-        #===wzy===
         # Uni3D ViT backbone.
         pc_model: str,
         pc_feat_dim: int,
@@ -352,14 +338,12 @@ class Uni3DPointEncoderForSAM(PointcloudEncoder):
         use_esam_adapter: bool = True,
         esam_adapter_mlp_ratio: float = 0.25,
         esam_adapter_scale: float = 0.5,
-        #===wzy===
     ):
        
         import timm
         from types import SimpleNamespace
 
         args = SimpleNamespace(
-            #===wzy===
             # Uni3D ViT backbone.
             pc_model=pc_model,
             pc_feat_dim=pc_feat_dim,
@@ -377,7 +361,6 @@ class Uni3DPointEncoderForSAM(PointcloudEncoder):
             use_esam_adapter=use_esam_adapter,
             esam_adapter_mlp_ratio=esam_adapter_mlp_ratio,
             esam_adapter_scale=esam_adapter_scale,
-            #===wzy===
         )
 
         #通过timm创建好 nn.Module 模型实例。即point_transformer = EVA02Tiny模型对象，真正被使用的是blocks、pos_drop、norm、fc_norm等
@@ -390,4 +373,3 @@ class Uni3DPointEncoderForSAM(PointcloudEncoder):
             point_transformer=point_transformer,
             args=args,
         )
-#===wzy===

@@ -27,6 +27,7 @@ Data flow:
 
 import math
 import os
+import pathlib
 import sys
 from typing import List, Optional
 
@@ -105,7 +106,7 @@ class PointSAMHeatmapBridge(nn.Module):
 
     def __init__(
         self,
-        pointsam_root: str = '/DATA/disk0/zykh/wzy/code/pointsam_last',
+        pointsam_root: str = None,
         embed_dim: int = 256,
         out_dim: int = None,
         heatmap_config_name: str = 'large_heatmap_uni3d_token_similarity',
@@ -177,6 +178,14 @@ class PointSAMHeatmapBridge(nn.Module):
     @staticmethod
     def _prepare_pointsam_import(pointsam_root: str) -> str:
         """Add pointsam to sys.path and evict stale pc_sam modules."""
+        if not pointsam_root:
+            try:
+                import pc_sam
+            except ImportError as exc:
+                raise ImportError(
+                    "PointSAM is not installed. Run `pip install -e ./PointSAM`."
+                ) from exc
+            return str(pathlib.Path(pc_sam.__file__).resolve().parent.parent)
         pointsam_root = os.path.abspath(os.path.expanduser(pointsam_root))
         extra_paths = [
             pointsam_root,

@@ -67,14 +67,18 @@ class DP3(BasePolicy):
             act_text_align_config: Optional[Dict] = None,
             # training-only MQ diversity auxiliary objectives
             mq_diversity: Optional[Dict] = None,
-            # frozen-input action-conditioned dense visual residual reader
-            dense_residual_reader: Optional[Dict] = None,
             # action generation objective
             generation_type: str = "diffusion",
             flow_matching: Optional[Dict] = None,
             # parameters passed to step
             **kwargs):
         super().__init__()
+
+        legacy_dense_reader = kwargs.pop("dense_residual_reader", None)
+        if legacy_dense_reader and bool(legacy_dense_reader.get("enabled", False)):
+            raise ValueError(
+                "Enabled dense_residual_reader checkpoints are no longer supported"
+            )
 
         self.use_target_ee = use_target_ee
 
@@ -444,39 +448,6 @@ class DP3(BasePolicy):
             encoder_patch_dim = obs_encoder.output_shape()
         self.encoder_patch_dim = int(encoder_patch_dim)
 
-        dense_reader_config = dict(dense_residual_reader or {})
-        self.use_dense_residual_reader = bool(
-            dense_reader_config.get("enabled", False)
-        )
-        if self.use_dense_residual_reader:
-            if not use_act:
-                raise ValueError(
-                    "Dense residual reader is ACT-primary and requires use_act=True"
-                )
-            if condition_type != "one_way_transformer":
-                raise ValueError(
-                    "Dense residual reader requires condition_type=one_way_transformer"
-                )
-            if self.pc_encoder_extract_global_feature:
-                raise ValueError(
-                    "Dense residual reader requires patch-token point features"
-                )
-            if cat_on_token:
-                raise NotImplementedError(
-                    "Dense residual reader currently requires cat_on_token=False"
-                )
-            dense_reader_config.setdefault(
-                "dense_feature_dim", self.encoder_patch_dim
-            )
-            dense_reader_config.setdefault(
-                "dense_pe_dim",
-                int(
-                    (pointcloud_encoder_cfg or {}).get(
-                        "embed_dim", self.encoder_patch_dim
-                    )
-                ),
-            )
-
         # create diffusion model
         obs_feature_dim = obs_encoder.output_shape() # embed_dim + robot_state_embed_dim = 512
         input_dim = action_dim + obs_feature_dim
@@ -544,7 +515,6 @@ class DP3(BasePolicy):
             transformer_config=transformer_config,
             use_target_ee=self.use_target_ee,
             cat_on_token=self.cat_on_token,
-            dense_residual_reader=dense_reader_config,
         )
 
         self.obs_encoder = obs_encoder
@@ -651,39 +621,26 @@ class DP3(BasePolicy):
 
         mq_diversity = dict(mq_diversity or {})
         raw_diversity = dict(mq_diversity.get("raw") or {})
-        flow_diversity = dict(mq_diversity.get("flow") or {})
+        legacy_flow_diversity = dict(mq_diversity.get("flow") or {})
+        if bool(legacy_flow_diversity.get("enabled", False)):
+            raise ValueError(
+                "mq_diversity.flow was removed; only mq_diversity.raw is supported"
+            )
         self.mq_diversity_raw_enabled = bool(raw_diversity.get("enabled", False))
         self.mq_diversity_raw_weight = float(raw_diversity.get("weight", 0.0))
-        self.mq_diversity_flow_enabled = bool(flow_diversity.get("enabled", False))
-        self.mq_diversity_flow_weight = float(flow_diversity.get("weight", 0.0))
-        self.mq_diversity_flow_detach_projection_params = bool(
-            flow_diversity.get("detach_projection_params", True)
-        )
         self.mq_diversity_eps = float(mq_diversity.get("eps", 1e-6))
-        self.mq_diversity_enabled = (
-            self.mq_diversity_raw_enabled or self.mq_diversity_flow_enabled
-        )
-        if self.mq_diversity_raw_weight < 0 or self.mq_diversity_flow_weight < 0:
-            raise ValueError("MQ diversity weights must be non-negative")
+        self.mq_diversity_enabled = self.mq_diversity_raw_enabled
+        if self.mq_diversity_raw_weight < 0:
+            raise ValueError("MQ raw diversity weight must be non-negative")
         if self.mq_diversity_eps <= 0:
             raise ValueError("mq_diversity.eps must be positive")
         if self.mq_diversity_enabled and not self.use_act:
             raise ValueError("MQ diversity requires use_act=True")
-        if self.mq_diversity_flow_enabled and not isinstance(
-            getattr(self.model, "global_cond_proj", None), nn.Linear
-        ):
-            raise ValueError(
-                "Flow-readable MQ diversity requires a Linear global_cond_proj"
-            )
         if self.mq_diversity_enabled:
             cprint(
                 "[MQDiversity] enabled: "
                 f"raw={self.mq_diversity_raw_enabled} "
-                f"(weight={self.mq_diversity_raw_weight}), "
-                f"flow={self.mq_diversity_flow_enabled} "
-                f"(weight={self.mq_diversity_flow_weight}, "
-                "detach_projection_params="
-                f"{self.mq_diversity_flow_detach_projection_params})",
+                f"(weight={self.mq_diversity_raw_weight})",
                 "green",
             )
 
@@ -780,14 +737,12 @@ class DP3(BasePolicy):
         print_params(self)
 
     def _apply_act(
-            self, nobs_features, pc_pe, heatmap=None, text_tokens=None,
-            point_centers=None):
+            self, nobs_features, pc_pe, heatmap=None, text_tokens=None):
         compact_features, compact_pc_pe, act_debug = self.act(
             nobs_features,
             pc_pe,
             heatmap=heatmap,
             text_tokens=text_tokens,
-            point_centers=point_centers,
         )
         if compact_features.shape[:2] != compact_pc_pe.shape[:2]:
             raise RuntimeError(
@@ -798,61 +753,18 @@ class DP3(BasePolicy):
         self.last_act_debug = act_debug
         return compact_features, compact_pc_pe
 
-    def _capture_dense_visual_condition(self, point_tokens, pc_pe):
-        if not self.use_dense_residual_reader:
-            return None, None
-        if point_tokens.ndim != 3 or pc_pe.ndim != 3:
-            raise ValueError("Dense visual condition expects rank-3 token tensors")
-        dense_tokens = point_tokens[..., :self.encoder_patch_dim]
-        if dense_tokens.shape[1] == pc_pe.shape[1] + 1:
-            dense_tokens = dense_tokens[:, 1:, :]
-        if dense_tokens.shape[:2] != pc_pe.shape[:2]:
-            raise ValueError(
-                "Dense visual tokens and pc_pe must align, got "
-                f"{tuple(dense_tokens.shape)} and {tuple(pc_pe.shape)}"
-            )
-        return dense_tokens, pc_pe
-
-    def _add_dense_reader_debug(self, loss_dict):
-        reader = getattr(self.model, "dense_residual_reader", None)
-        if reader is None or not reader.last_debug:
-            return
-        for key, value in reader.last_debug.items():
-            if isinstance(value, (int, float)):
-                loss_dict[f"dense_reader_{key}"] = value
-
     def _add_mq_diversity_loss(
             self,
             loss: torch.Tensor,
             loss_dict: Dict,
-            mq_features_per_frame: Optional[torch.Tensor],
-            global_cond: Optional[torch.Tensor]):
+            mq_features_per_frame: Optional[torch.Tensor]):
         if not self.training or not self.mq_diversity_enabled:
             return loss, loss_dict
-        flow_projection = getattr(self.model, "global_cond_proj", None)
-        flow_mq_feature_offset = None
-        if self.mq_diversity_flow_enabled:
-            if global_cond is None or global_cond.ndim < 2:
-                raise RuntimeError(
-                    "Flow-readable MQ diversity requires sequence global_cond"
-                )
-            # global_cond begins with MQ content; the projection may prepend a
-            # diffusion-time embedding and append other condition features.
-            flow_mq_feature_offset = (
-                flow_projection.in_features - global_cond.shape[-1]
-            )
         loss, diversity_logs = add_mq_diversity_loss(
             loss,
             mq_features_per_frame,
             raw_enabled=self.mq_diversity_raw_enabled,
             raw_weight=self.mq_diversity_raw_weight,
-            flow_enabled=self.mq_diversity_flow_enabled,
-            flow_weight=self.mq_diversity_flow_weight,
-            flow_projection=flow_projection,
-            flow_detach_projection_params=(
-                self.mq_diversity_flow_detach_projection_params
-            ),
-            flow_mq_feature_offset=flow_mq_feature_offset,
             eps=self.mq_diversity_eps,
         )
         loss_dict.update(diversity_logs)
@@ -1064,7 +976,6 @@ class DP3(BasePolicy):
             condition_data_pc=None, condition_mask_pc=None,
             local_cond=None, global_cond=None,
             pc_pe=None,
-            dense_cond=None, dense_pe=None,
             n_obs_steps=None,
             generator=None,
             # keyword arguments to scheduler.step
@@ -1088,7 +999,6 @@ class DP3(BasePolicy):
             model_output = model(sample=trajectory,
                                 timestep=t,
                                 local_cond=local_cond, global_cond=global_cond, pc_pe=pc_pe,
-                                dense_cond=dense_cond, dense_pe=dense_pe,
                                 n_obs_steps=n_obs_steps)
 
             # 3. compute previous image: x_t -> x_t-1
@@ -1104,7 +1014,6 @@ class DP3(BasePolicy):
             condition_data_pc=None, condition_mask_pc=None,
             local_cond=None, global_cond=None,
             pc_pe=None,
-            dense_cond=None, dense_pe=None,
             n_obs_steps=None,
             generator=None,
             **kwargs
@@ -1117,8 +1026,6 @@ class DP3(BasePolicy):
             local_cond=local_cond,
             global_cond=global_cond,
             pc_pe=pc_pe,
-            dense_cond=dense_cond,
-            dense_pe=dense_pe,
             n_obs_steps=sample_n_obs_steps,
             eps=self.flow_eps,
             num_inference_steps=self.flow_num_inference_steps,
@@ -1160,8 +1067,6 @@ class DP3(BasePolicy):
         local_cond = None
         global_cond = None
         pc_pe = None
-        dense_cond = None
-        dense_pe = None
         if self.obs_as_global_cond:
             text_feat = self._compute_text_feature(
                 B,
@@ -1184,32 +1089,20 @@ class DP3(BasePolicy):
                 lambda x: x[:, :To, ...].reshape(-1, *x.shape[2:]))
 
             if not self.pc_encoder_extract_global_feature:
-                point_centers = None
-                spatial_scope_enabled = bool(
-                    self.use_act and self.act is not None and self.act.spatial_scope_enabled
-                )
                 if self.use_pointsam_heatmap:
-                    encoder_result = self.obs_encoder(
+                    nobs_features, pc_pe, heatmap = self.obs_encoder(
                         this_nobs,
                         eval=True,
                         text=pointsam_text,
                         return_heatmap=True,
-                        return_point_centers=spatial_scope_enabled,
                     )
-                    nobs_features, pc_pe, heatmap = encoder_result[:3]
-                    if spatial_scope_enabled:
-                        point_centers = encoder_result[3]
                 else:
                     if self.use_encoder_clip_heatmap:
-                        encoder_result = self.obs_encoder(
+                        nobs_features, pc_pe, pc_embedding = self.obs_encoder(
                             this_nobs,
                             eval=True,
                             return_pc_embedding=True,
-                            return_point_centers=spatial_scope_enabled,
                         )
-                        nobs_features, pc_pe, pc_embedding = encoder_result[:3]
-                        if spatial_scope_enabled:
-                            point_centers = encoder_result[3]
                         heatmap = self._build_encoder_clip_heatmap(
                             text_feat,
                             pc_embedding,
@@ -1217,18 +1110,9 @@ class DP3(BasePolicy):
                             target_dtype=pc_embedding.dtype,
                         )
                     else:
-                        encoder_result = self.obs_encoder(
-                            this_nobs, eval=True,
-                            return_point_centers=spatial_scope_enabled,
-                        )
-                        nobs_features, pc_pe = encoder_result[:2]
-                        if spatial_scope_enabled:
-                            point_centers = encoder_result[2]
+                        nobs_features, pc_pe = self.obs_encoder(this_nobs, eval=True)
                         heatmap = None
                 if self.use_act:
-                    dense_cond, dense_pe = self._capture_dense_visual_condition(
-                        nobs_features, pc_pe
-                    )
                     act_text_tokens = self._build_act_text_tokens(
                         text_feat,
                         self.n_obs_steps,
@@ -1239,7 +1123,6 @@ class DP3(BasePolicy):
                         pc_pe,
                         heatmap=heatmap,
                         text_tokens=act_text_tokens,
-                        point_centers=point_centers,
                     )
                 num_patches = pc_pe.shape[1]
                 num_tokens = nobs_features.shape[1]
@@ -1251,13 +1134,6 @@ class DP3(BasePolicy):
                 if not self.pc_encoder_extract_global_feature:
                     global_cond = nobs_features.reshape(B, self.n_obs_steps * num_tokens, -1)
                     pc_pe = pc_pe.reshape(B, self.n_obs_steps * num_patches, -1)
-                    if dense_cond is not None:
-                        dense_cond = dense_cond.reshape(
-                            B, self.n_obs_steps * dense_cond.shape[1], -1
-                        )
-                        dense_pe = dense_pe.reshape(
-                            B, self.n_obs_steps * dense_pe.shape[1], -1
-                        )
                 else:
                     global_cond = nobs_features.reshape(B, self.n_obs_steps, -1)
             else:
@@ -1291,8 +1167,6 @@ class DP3(BasePolicy):
                 local_cond=local_cond,
                 global_cond=global_cond,
                 pc_pe=pc_pe,
-                dense_cond=dense_cond,
-                dense_pe=dense_pe,
                 n_obs_steps=self.n_obs_steps,
                 **self.kwargs)
         else:
@@ -1302,8 +1176,6 @@ class DP3(BasePolicy):
                 local_cond=local_cond,
                 global_cond=global_cond,
                 pc_pe=pc_pe,
-                dense_cond=dense_cond,
-                dense_pe=dense_pe,
                 n_obs_steps=self.n_obs_steps,
                 **self.kwargs)
         
@@ -1599,8 +1471,6 @@ class DP3(BasePolicy):
             local_cond=None,
             global_cond=None,
             pc_pe=None,
-            dense_cond=None,
-            dense_pe=None,
             dim_weights=None,
             ):
         consistency_weight, alpha = self._get_consistency_weights()
@@ -1611,8 +1481,6 @@ class DP3(BasePolicy):
             local_cond=local_cond,
             global_cond=global_cond,
             pc_pe=pc_pe,
-            dense_cond=dense_cond,
-            dense_pe=dense_pe,
             n_obs_steps=self.n_obs_steps,
             eps=self.flow_eps,
             delta=self.flow_delta,
@@ -1674,8 +1542,6 @@ class DP3(BasePolicy):
             local_cond=None,
             global_cond=None,
             pc_pe=None,
-            dense_cond=None,
-            dense_pe=None,
             ):
         """Differentiate through the deployed Euler rollout toward clean action."""
         batch_size = min(self.flow_rollout_endpoint_batch_size, target.shape[0])
@@ -1687,8 +1553,6 @@ class DP3(BasePolicy):
         local_cond = take_batch(local_cond)
         global_cond = take_batch(global_cond)
         pc_pe = take_batch(pc_pe)
-        dense_cond = take_batch(dense_cond)
-        dense_pe = take_batch(dense_pe)
         sample = torch.randn_like(target)
         dt = (1.0 - self.flow_eps) / self.flow_rollout_endpoint_num_steps
         for index in range(self.flow_rollout_endpoint_num_steps):
@@ -1705,8 +1569,6 @@ class DP3(BasePolicy):
                 local_cond=local_cond,
                 global_cond=global_cond,
                 pc_pe=pc_pe,
-                dense_cond=dense_cond,
-                dense_pe=dense_pe,
                 n_obs_steps=self.n_obs_steps,
             )
             sample = sample + dt * velocity
@@ -1737,8 +1599,6 @@ class DP3(BasePolicy):
         trajectory = nactions
         cond_data = trajectory
         pc_pe = None
-        dense_cond = None
-        dense_pe = None
         mq_features_per_frame = None
 
         if self.obs_as_global_cond:
@@ -1777,31 +1637,18 @@ class DP3(BasePolicy):
                 lambda x: x[:, :self.n_obs_steps, ...].reshape(-1, *x.shape[2:]))
 
             if not self.pc_encoder_extract_global_feature:
-                point_centers = None
-                spatial_scope_enabled = bool(
-                    self.use_act and self.act is not None and self.act.spatial_scope_enabled
-                )
-
                 if self.use_pointsam_heatmap:
-                    encoder_result = self.obs_encoder(
+                    nobs_features, pc_pe, heatmap = self.obs_encoder(
                         this_nobs,
                         text=pointsam_text,
                         return_heatmap=True,
-                        return_point_centers=spatial_scope_enabled,
                     )
-                    nobs_features, pc_pe, heatmap = encoder_result[:3]
-                    if spatial_scope_enabled:
-                        point_centers = encoder_result[3]
                 else:
                     if self.use_encoder_clip_heatmap:
-                        encoder_result = self.obs_encoder(
+                        nobs_features, pc_pe, pc_embedding = self.obs_encoder(
                             this_nobs,
                             return_pc_embedding=True,
-                            return_point_centers=spatial_scope_enabled,
                         )
-                        nobs_features, pc_pe, pc_embedding = encoder_result[:3]
-                        if spatial_scope_enabled:
-                            point_centers = encoder_result[3]
                         heatmap = self._build_encoder_clip_heatmap(
                             text_feat,
                             pc_embedding,
@@ -1809,18 +1656,9 @@ class DP3(BasePolicy):
                             target_dtype=pc_embedding.dtype,
                         )
                     else:
-                        encoder_result = self.obs_encoder(
-                            this_nobs,
-                            return_point_centers=spatial_scope_enabled,
-                        )
-                        nobs_features, pc_pe = encoder_result[:2]
-                        if spatial_scope_enabled:
-                            point_centers = encoder_result[2]
+                        nobs_features, pc_pe = self.obs_encoder(this_nobs)
                         heatmap = None
                 if self.use_act:
-                    dense_cond, dense_pe = self._capture_dense_visual_condition(
-                        nobs_features, pc_pe
-                    )
                     act_text_tokens = self._build_act_text_tokens(
                         text_feat,
                         self.n_obs_steps,
@@ -1831,7 +1669,6 @@ class DP3(BasePolicy):
                         pc_pe,
                         heatmap=heatmap,
                         text_tokens=act_text_tokens,
-                        point_centers=point_centers,
                     )
                     if self.training and self.mq_diversity_enabled:
                         # Shape [B*T, Q, D]: each frame remains an independent
@@ -1847,17 +1684,6 @@ class DP3(BasePolicy):
                 if not self.pc_encoder_extract_global_feature:
                     global_cond = nobs_features.reshape(batch_size, self.n_obs_steps * num_tokens, -1)
                     pc_pe = pc_pe.reshape(batch_size, self.n_obs_steps * num_patches, -1)
-                    if dense_cond is not None:
-                        dense_cond = dense_cond.reshape(
-                            batch_size,
-                            self.n_obs_steps * dense_cond.shape[1],
-                            -1,
-                        )
-                        dense_pe = dense_pe.reshape(
-                            batch_size,
-                            self.n_obs_steps * dense_pe.shape[1],
-                            -1,
-                        )
                 else:
                     global_cond = nobs_features.reshape(batch_size, self.n_obs_steps, -1)
             else:
@@ -1910,8 +1736,6 @@ class DP3(BasePolicy):
                 local_cond=local_cond,
                 global_cond=global_cond,
                 pc_pe=pc_pe,
-                dense_cond=dense_cond,
-                dense_pe=dense_pe,
                 dim_weights=self._flow_dim_weights,
             )
             endpoint_weight = self._get_flow_rollout_endpoint_weight()
@@ -1921,8 +1745,6 @@ class DP3(BasePolicy):
                     local_cond=local_cond,
                     global_cond=global_cond,
                     pc_pe=pc_pe,
-                    dense_cond=dense_cond,
-                    dense_pe=dense_pe,
                 )
                 weighted_endpoint_loss = (
                     endpoint_weight * endpoint_loss
@@ -1947,7 +1769,6 @@ class DP3(BasePolicy):
                 loss,
                 loss_dict,
                 mq_features_per_frame,
-                global_cond,
             )
             # S6-audit: dual-arm differential diagnostic logging
             if self._dual_arm_diff_weight > 0:
@@ -2018,7 +1839,6 @@ class DP3(BasePolicy):
                 })
                 # Diagnostic keys (only present every N steps)
                 loss_dict.update(align_diag_dict)
-            self._add_dense_reader_debug(loss_dict)
             return loss, loss_dict
 
         # Sample noise that we'll add to the images
@@ -2048,8 +1868,6 @@ class DP3(BasePolicy):
                         local_cond=local_cond,
                         global_cond=global_cond,
                         pc_pe=pc_pe,
-                        dense_cond=dense_cond,
-                        dense_pe=dense_pe,
                         n_obs_steps=self.n_obs_steps)
 
 
@@ -2106,7 +1924,6 @@ class DP3(BasePolicy):
             loss,
             loss_dict,
             mq_features_per_frame,
-            global_cond,
         )
         if global_cond is not None:
             loss_dict["condition_num_tokens"] = int(global_cond.shape[1]) if global_cond.dim() == 3 else 1
@@ -2154,5 +1971,4 @@ class DP3(BasePolicy):
             })
             # Diagnostic keys (only present every N steps)
             loss_dict.update(align_diag_dict)
-        self._add_dense_reader_debug(loss_dict)
         return loss, loss_dict

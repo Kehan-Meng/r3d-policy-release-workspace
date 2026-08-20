@@ -108,9 +108,7 @@ def latest_checkpoint(output_dir):
     return max(numbered, key=score) if numbered else candidates[-1]
 
 
-def load_policy(
-        cfg, checkpoint_path, device, policy_source="auto",
-        dense_sidecar_checkpoint=None, dense_sidecar_intervention="none"):
+def load_policy(cfg, checkpoint_path, device, policy_source="auto"):
     runtime = cfg.get("runtime", {})
     project_dir = resolve_repo_path(runtime.get("project_dir"), default=REPO_ROOT)
     r3d_dir = resolve_repo_path(runtime.get("r3d_dir"), default="R3D")
@@ -120,27 +118,9 @@ def load_policy(
 
     payload = torch.load(open(checkpoint_path, "rb"), pickle_module=dill, map_location="cpu")
     train_cfg = payload["cfg"]
-    sidecar_payload = None
-    if dense_sidecar_checkpoint is not None:
-        sidecar_payload = torch.load(
-            dense_sidecar_checkpoint, map_location="cpu", weights_only=False
-        )
-        if sidecar_payload.get("format") != "r3d_dense_residual_sidecar_v1":
-            raise ValueError(
-                f"Unsupported dense sidecar format: {sidecar_payload.get('format')}"
-            )
-        expected_base = pathlib.Path(sidecar_payload["base_checkpoint"]).resolve()
-        actual_base = pathlib.Path(checkpoint_path).resolve()
-        if expected_base != actual_base:
-            raise ValueError(
-                "Dense sidecar/base checkpoint mismatch: "
-                f"sidecar expects {expected_base}, got {actual_base}"
-            )
     with open_dict(train_cfg):
         train_cfg.training.device = device
         train_cfg.training.use_ddp = False
-        if sidecar_payload is not None:
-            train_cfg.policy.dense_residual_reader = sidecar_payload["reader_config"]
         # Evaluation-only ACT interventions live in the external experiment
         # config, not in the checkpoint's saved training config. Propagate
         # them before constructing the workspace so causal heatmap ablations
@@ -165,21 +145,7 @@ def load_policy(
     print(f"[EVAL] ACT heatmap_intervention={intervention}", flush=True)
 
     workspace = TrainDP3Workspace(train_cfg, output_dir=str(pathlib.Path(cfg.experiment.output_dir)))
-    workspace.load_payload(
-        payload,
-        exclude_keys=("optimizer",) if sidecar_payload is not None else None,
-    )
-    if sidecar_payload is not None:
-        if policy_source == "ema":
-            raise ValueError("Dense sidecars are trained against raw model weights; use --policy-source model.")
-        workspace.model.model.dense_residual_reader.load_state_dict(
-            sidecar_payload["reader_state_dict"], strict=True
-        )
-        workspace.model.model.dense_residual_reader.default_intervention = (
-            dense_sidecar_intervention
-        )
-        if policy_source == "auto":
-            policy_source = "model"
+    workspace.load_payload(payload)
     if policy_source == "auto":
         policy_source = "ema" if train_cfg.training.use_ema else "model"
     if policy_source == "ema":
@@ -192,12 +158,6 @@ def load_policy(
         raise ValueError(f"Unknown policy_source: {policy_source}")
     policy.to(torch.device(device))
     policy.eval()
-    if sidecar_payload is not None:
-        payload["_dense_sidecar_metadata"] = {
-            "checkpoint": str(dense_sidecar_checkpoint),
-            "epoch": sidecar_payload.get("epoch"),
-            "intervention": dense_sidecar_intervention,
-        }
     return policy, train_cfg, policy_source, payload
 
 
@@ -631,13 +591,9 @@ def run_eval(
         robotwin_rt_spp=None,
         fast=False,
         robotwin_camera_shader=None,
-        dense_sidecar_checkpoint=None,
-        dense_sidecar_intervention="none",
         ):
     policy, train_cfg, resolved_policy_source, payload = load_policy(
         cfg, checkpoint_path, device, policy_source=policy_source,
-        dense_sidecar_checkpoint=dense_sidecar_checkpoint,
-        dense_sidecar_intervention=dense_sidecar_intervention,
     )
     if n_action_steps is not None:
         n_action_steps = int(n_action_steps)
@@ -800,7 +756,6 @@ def run_eval(
             "frame_adapter", {"frame_adapter_enabled": False}
         ),
         "frame_evaluation": frame_eval_metadata,
-        "dense_sidecar": payload.get("_dense_sidecar_metadata"),
     }
     if getattr(base_policy, "generation_type", None) == "flow_matching":
         solver = getattr(base_policy, "flow_solver", "euler")
@@ -836,19 +791,6 @@ def main():
     parser.add_argument("--eval-episodes", type=int, default=None)
     parser.add_argument("--device", default=None)
     parser.add_argument("--policy-source", choices=["auto", "model", "ema"], default="auto")
-    parser.add_argument(
-        "--dense-sidecar-checkpoint",
-        default=None,
-        help="Optional small dense-residual sidecar checkpoint layered onto --checkpoint.",
-    )
-    parser.add_argument(
-        "--dense-sidecar-intervention",
-        choices=[
-            "none", "off", "sample_shuffle", "token_mean", "feature_zero",
-            "pe_zero", "all_zero", "query_zero",
-        ],
-        default="none",
-    )
     parser.add_argument("--flow-inference-steps", type=int, default=None)
     parser.add_argument("--flow-solver", choices=["euler", "heun", "rk4"], default=None)
     parser.add_argument(
@@ -959,8 +901,6 @@ def main():
     print(f"[EVAL] checkpoint={checkpoint_path}", flush=True)
     print(f"[EVAL] device={device}", flush=True)
     print(f"[EVAL] policy_source={args.policy_source}", flush=True)
-    print(f"[EVAL] dense_sidecar_checkpoint={args.dense_sidecar_checkpoint}", flush=True)
-    print(f"[EVAL] dense_sidecar_intervention={args.dense_sidecar_intervention}", flush=True)
     print(f"[EVAL] eval_episodes={eval_episodes}", flush=True)
     print(f"[EVAL] eval_seed={args.eval_seed}", flush=True)
     print(f"[EVAL] n_action_steps={args.n_action_steps or 'checkpoint-default'}", flush=True)
@@ -1006,8 +946,6 @@ def main():
         robotwin_rt_spp=args.robotwin_rt_spp,
         robotwin_camera_shader=args.robotwin_camera_shader,
         fast=args.fast,
-        dense_sidecar_checkpoint=args.dense_sidecar_checkpoint,
-        dense_sidecar_intervention=args.dense_sidecar_intervention,
     )
     result["experiment"] = OmegaConf.to_container(cfg.experiment, resolve=True)
     result["checkpoint"] = str(checkpoint_path)
@@ -1023,14 +961,9 @@ def main():
     result["robotwin_defer_intermediate_render"] = args.robotwin_defer_intermediate_render
     result["robotwin_rt_spp"] = args.robotwin_rt_spp or 32
     result["robotwin_camera_shader"] = args.robotwin_camera_shader or "rt"
-    result["dense_sidecar_checkpoint"] = args.dense_sidecar_checkpoint
-    result["dense_sidecar_intervention"] = args.dense_sidecar_intervention
     solver = result.get("flow_solver", args.flow_solver or "euler")
 
     suffix = f"{checkpoint_path.stem}-{result['policy_source']}"
-    if args.dense_sidecar_checkpoint:
-        sidecar_stem = pathlib.Path(args.dense_sidecar_checkpoint).stem
-        suffix += f"-{sidecar_stem}-{args.dense_sidecar_intervention}"
     # A Flow checkpoint can be evaluated with several Euler step counts. Keep
     # each result instead of silently overwriting the previous step setting.
     if result.get("flow_inference_steps") is not None:

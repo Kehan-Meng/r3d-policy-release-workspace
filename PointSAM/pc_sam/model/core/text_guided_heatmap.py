@@ -12,14 +12,11 @@ Data flow:
            Optionally also returns patch heatmaps [B, N1].
 """
 
-#===wzy===
 from typing import TYPE_CHECKING
-#===wzy===
 
 import torch
 import torch.nn as nn
 
-#===wzy===
 from pc_sam.utils.common import AuxInputs
 
 if TYPE_CHECKING:
@@ -28,11 +25,9 @@ if TYPE_CHECKING:
     )
     from pc_sam.model.encoder.point_encoder import Uni3DPointEncoderForSAM
     from pc_sam.model.encoder.text_encoder import OpenCLIPTokenTextEncoder
-#===wzy===
 
 
 class PointCloudSAM(nn.Module):
-    #===wzy===
     def __init__(
         self,
         pc_encoder: "Uni3DPointEncoderForSAM",
@@ -68,7 +63,6 @@ class PointCloudSAM(nn.Module):
         # 同一模态的全局 token 和 patch token 共享投影，保证两者位于同一空间。
         self.pc_projection = nn.Linear(pc_feature_dim, self.contrastive_dim)
         self.text_projection = nn.Linear(text_feature_dim, self.contrastive_dim)
-    #===wzy===
     
     # ===================== Text-Guided Heatmap Forward =====================
     #下采样
@@ -81,13 +75,11 @@ class PointCloudSAM(nn.Module):
         if heatmaps.shape[1] == 1:
             heatmaps = heatmaps.transpose(1, 2).contiguous()  # [B, N, 1]
 
-        #===wzy===
         if "knn_idx" not in patches:
             raise ValueError(
                 "return_patch_heatmap=True requires patches['knn_idx']; "
                 "the current Uni3D token encoder returns patch centers only."
             )
-        #===wzy===
         knn_idx = patches["knn_idx"].to(device=heatmaps.device, dtype=torch.long)
         gather_index = knn_idx.unsqueeze(-1).expand(-1, -1, -1, heatmaps.shape[-1])
         heatmaps = heatmaps.unsqueeze(1).expand(-1, knn_idx.shape[1], -1, -1)
@@ -128,9 +120,7 @@ class PointCloudSAM(nn.Module):
 
         # ---- 1. Point cloud encoder ----
         # pc_embeddings: [B, L, D]
-        #===wzy===
         # patches = {"centers": center}
-        #===wzy===
         
         pc_embeddings, patches = self.pc_encoder(coords, features)
 
@@ -163,13 +153,11 @@ class PointCloudSAM(nn.Module):
         )
 
         # ---- 3. Heatmap decoder ----
-        #===wzy===
         heatmaps = self.mask_decoder(
             pc_embeddings=pc_embeddings,
             text_tokens=text_tokens,
             aux_inputs=aux_inputs,
         )
-        #===wzy===
         # heatmaps: [B, 1, Ng]
 
         contrastive_features = None

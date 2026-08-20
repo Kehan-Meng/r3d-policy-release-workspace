@@ -3,23 +3,23 @@ name: robotwin2_hard5_demo20
 task_entries: &task_entries
   - task_name: beat_block_hammer
     setting: demo_randomized
-    zarr_path: /DATA/disk0/zykh/wzy/code/R3D-Policy/R3D/data/robotwin2_demo20/beat_block_hammer-demo_randomized-20-seed0.zarr
+    zarr_path: R3D/data/robotwin2_demo20/beat_block_hammer-demo_randomized-20-seed0.zarr
     text_command: beat_block_hammer
   - task_name: lift_pot
     setting: demo_randomized
-    zarr_path: /DATA/disk0/zykh/wzy/code/R3D-Policy/R3D/data/robotwin2_demo20/lift_pot-demo_randomized-20-seed0.zarr
+    zarr_path: R3D/data/robotwin2_demo20/lift_pot-demo_randomized-20-seed0.zarr
     text_command: lift_pot
   - task_name: adjust_bottle
     setting: demo_randomized
-    zarr_path: /DATA/disk0/zykh/wzy/code/R3D-Policy/R3D/data/robotwin2_demo20/adjust_bottle-demo_randomized-20-seed0.zarr
+    zarr_path: R3D/data/robotwin2_demo20/adjust_bottle-demo_randomized-20-seed0.zarr
     text_command: adjust_bottle
   - task_name: place_burger_fries
     setting: demo_randomized
-    zarr_path: /DATA/disk0/zykh/wzy/code/R3D-Policy/R3D/data/robotwin2_demo20/place_burger_fries-demo_randomized-20-seed0.zarr
+    zarr_path: R3D/data/robotwin2_demo20/place_burger_fries-demo_randomized-20-seed0.zarr
     text_command: place_burger_fries
   - task_name: press_stapler
     setting: demo_randomized
-    zarr_path: /DATA/disk0/zykh/wzy/code/R3D-Policy/R3D/data/robotwin2_demo20/press_stapler-demo_randomized-20-seed0.zarr
+    zarr_path: R3D/data/robotwin2_demo20/press_stapler-demo_randomized-20-seed0.zarr
     text_command: press_stapler
 
 shape_meta: &shape_meta
@@ -73,6 +73,6 @@ dataset:
   contrast_range: ${data_augmentation.contrast_range}
   saturation_range: ${data_augmentation.saturation_range}
   use_target_ee: ${policy.use_target_ee}
-  text_json_path: /DATA/disk0/zykh/wzy/code/R3D-Policy/R3D/data/text.json
+  text_json_path: R3D/data/text.json
   return_text: ${policy.use_text}
   strict_text_lookup: false

@@ -76,23 +76,6 @@ policy:
     raw:
       enabled: false
       weight: 0.0
-    flow:
-      enabled: false
-      weight: 0.0
-      detach_projection_params: true
-
-  # Optional ACT-primary dense visual residual sidecar.
-  dense_residual_reader:
-    enabled: false
-    num_heads: 4
-    downsample_rate: 4
-    max_residual_ratio: 0.10
-    initial_residual_ratio: 0.001
-    scale_floor: 0.05
-    eps: 1.0e-6
-    detach_inputs: true
-    null_subtract: false
-    interaction_subtract: false
 
   noise_scheduler:
     _target_: diffusers.schedulers.scheduling_ddim.DDIMScheduler

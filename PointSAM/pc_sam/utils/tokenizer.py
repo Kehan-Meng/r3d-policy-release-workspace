@@ -152,9 +152,7 @@ class SimpleTokenizer(object):
             tokens = tokens[:context_length]
             result[i, :len(tokens)] = torch.tensor(tokens)
 
-        #===wzy===
         # Keep a stable batch dimension so text encoders always receive [B, L].
         # if len(result) == 1:
         #     return result[0]
-        #===wzy===
         return result

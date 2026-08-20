@@ -86,10 +86,6 @@ policy:
     raw:
       enabled: true
       weight: 0.01
-    flow:
-      enabled: false
-      weight: 0.0
-      detach_projection_params: true
 training:
   device: cuda:0
   seed: 0

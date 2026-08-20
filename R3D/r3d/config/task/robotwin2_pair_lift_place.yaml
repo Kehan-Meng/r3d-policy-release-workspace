@@ -3,11 +3,11 @@ name: robotwin2_pair_lift_place
 task_entries: &task_entries
   - task_name: lift_pot
     setting: demo_randomized
-    zarr_path: /DATA/disk0/zykh/wzy/code/R3D-Policy/R3D/data/robotwin2_demo20/lift_pot-demo_randomized-20-seed0.zarr
+    zarr_path: R3D/data/robotwin2_demo20/lift_pot-demo_randomized-20-seed0.zarr
     text_command: lift_pot
   - task_name: place_burger_fries
     setting: demo_randomized
-    zarr_path: /DATA/disk0/zykh/wzy/code/R3D-Policy/R3D/data/robotwin2_demo20/place_burger_fries-demo_randomized-20-seed0.zarr
+    zarr_path: R3D/data/robotwin2_demo20/place_burger_fries-demo_randomized-20-seed0.zarr
     text_command: place_burger_fries
 
 shape_meta: &shape_meta
@@ -61,6 +61,6 @@ dataset:
   contrast_range: ${data_augmentation.contrast_range}
   saturation_range: ${data_augmentation.saturation_range}
   use_target_ee: ${policy.use_target_ee}
-  text_json_path: /DATA/disk0/zykh/wzy/code/R3D-Policy/R3D/data/text.json
+  text_json_path: R3D/data/text.json
   return_text: ${policy.use_text}
   strict_text_lookup: false

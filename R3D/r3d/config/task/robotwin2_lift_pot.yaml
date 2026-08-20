@@ -3,7 +3,7 @@ name: robotwin2_lift_pot
 task_entries: &task_entries
   - task_name: lift_pot
     setting: demo_randomized
-    zarr_path: /DATA/disk0/zykh/wzy/code/R3D-Policy/R3D/data/robotwin2_demo20/lift_pot-demo_randomized-20-seed0.zarr
+    zarr_path: R3D/data/robotwin2_demo20/lift_pot-demo_randomized-20-seed0.zarr
     text_command: lift_pot
 
 shape_meta: &shape_meta

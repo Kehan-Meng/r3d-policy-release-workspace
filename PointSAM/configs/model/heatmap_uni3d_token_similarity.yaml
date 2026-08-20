@@ -7,7 +7,6 @@ return_contrastive_features: false
 contrastive_dim: 256
 
 pc_encoder:
-  #===wzy===
   # Constructor args for Uni3DPointEncoderForSAM only.
   _target_: pc_sam.model.encoder.point_encoder.Uni3DPointEncoderForSAM
 
@@ -28,7 +27,6 @@ pc_encoder:
   use_esam_adapter: true
   esam_adapter_mlp_ratio: 0.25
   esam_adapter_scale: 0.5
-  #===wzy===
 
 mask_decoder:
   _target_: pc_sam.model.decoder.token_similarity_heatmap_decoder.TokenSimilarityHeatmapDecoder
@@ -43,9 +41,7 @@ mask_decoder:
   interp_k: 3
 
 text_prompt_encoder:
-  #===wzy===
   _target_: pc_sam.model.encoder.text_encoder.OpenCLIPTokenTextEncoder
-  #===wzy===
   model_name: EVA02-E-14-plus
   pretrained: ${oc.env:POINTSAM_CLIP_CHECKPOINT,""}
   context_length: 77

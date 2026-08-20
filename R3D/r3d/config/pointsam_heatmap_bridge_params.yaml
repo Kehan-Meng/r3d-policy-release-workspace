@@ -1,5 +1,5 @@
 # =============================================================================
-# PointSAMHeatmapBridge — R3D × pointsam_last 参数完整对照表
+# PointSAMHeatmapBridge — R3D × PointSAM 参数完整对照表
 # =============================================================================
 #
 # 这个文件记录了 PointSAMHeatmapBridge 的所有参数、来源和含义。
@@ -13,10 +13,8 @@
 pointcloud_encoder_cfg:
 
   # ── 路径 ─────────────────────────────────────────────────────────────
-  pointsam_root: /DATA/disk0/zykh/wzy/code/pointsam_last
-    # pointsam_last 代码仓库路径
-    # 来源: 用户指定
-    # 传给: sys.path 注入, Hydra config_dir, checkpoint 查找
+  pointsam_root: null
+    # null 使用当前环境中安装的 pc_sam 包。
 
   # ── 维度 ─────────────────────────────────────────────────────────────
   embed_dim: 256
@@ -33,7 +31,7 @@ pointcloud_encoder_cfg:
 
   # ── Hydra 模型配置 ───────────────────────────────────────────────────
   heatmap_config_name: large_heatmap_uni3d_token_similarity
-    # pointsam_last/configs/ 下的 Hydra 配置文件名 (不含 .yaml)
+    # PointSAM/configs/ 下的 Hydra 配置文件名 (不含 .yaml)
     # 该文件定义了模型架构: pc_encoder, mask_decoder, text_prompt_encoder
     # 当前默认: 使用 Uni3D-Ti + TokenSimilarityHeatmapDecoder + OpenCLIP
 
@@ -82,7 +80,7 @@ pointcloud_encoder_cfg:
     # 仅在 freeze=false 时生效
 
 # =============================================================================
-# 2. pointsam_last 内部模型架构 (由 heatmap_config_name 决定)
+# 2. PointSAM 内部模型架构 (由 heatmap_config_name 决定)
 # =============================================================================
 # 当前默认配置: configs/model/heatmap_uni3d_token_similarity.yaml
 #

@@ -3,11 +3,11 @@ name: robotwin2_pair_articulated
 task_entries: &task_entries
   - task_name: open_microwave
     setting: demo_clean
-    zarr_path: /DATA/disk0/zykh/wzy/code/R3D-Policy/R3D/data/robotwin2_demo20/open_microwave-demo_clean-20-seed0.zarr
+    zarr_path: R3D/data/robotwin2_demo20/open_microwave-demo_clean-20-seed0.zarr
     text_command: open_microwave
   - task_name: adjust_bottle
     setting: demo_randomized
-    zarr_path: /DATA/disk0/zykh/wzy/code/R3D-Policy/R3D/data/robotwin2_demo20/adjust_bottle-demo_randomized-20-seed0.zarr
+    zarr_path: R3D/data/robotwin2_demo20/adjust_bottle-demo_randomized-20-seed0.zarr
     text_command: adjust_bottle
 
 shape_meta: &shape_meta
@@ -61,6 +61,6 @@ dataset:
   contrast_range: ${data_augmentation.contrast_range}
   saturation_range: ${data_augmentation.saturation_range}
   use_target_ee: ${policy.use_target_ee}
-  text_json_path: /DATA/disk0/zykh/wzy/code/R3D-Policy/R3D/data/text.json
+  text_json_path: R3D/data/text.json
   return_text: ${policy.use_text}
   strict_text_lookup: false

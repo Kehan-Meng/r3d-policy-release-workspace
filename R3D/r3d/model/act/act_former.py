@@ -4,7 +4,6 @@ import torch.nn as nn
 from r3d.model.common.heatmap_utils import build_pseudo_heatmap_from_text
 
 from .blocks import HeatmapCrossAttentionBlock, MetaSelfAttentionBlock
-from .spatial_scope import build_spatial_scope_bias
 
 
 class AffordanceGuidedCompactorTransformer(nn.Module):
@@ -35,8 +34,6 @@ class AffordanceGuidedCompactorTransformer(nn.Module):
         competitive_cross1=False,
         competitive_cross2=False,
         competitive_temperature=1.0,
-        mq_spatial_scope=None,
-        mq_common_gradient_deflation=None,
     ):
         super().__init__()
         if token_dim <= 0:
@@ -70,45 +67,6 @@ class AffordanceGuidedCompactorTransformer(nn.Module):
         self.pseudo_heatmap_normalize = pseudo_heatmap_normalize
         self.return_debug = return_debug
         self.drop_cls_token = drop_cls_token
-        scope = dict(mq_spatial_scope or {})
-        deflation = dict(mq_common_gradient_deflation or {})
-        self.common_gradient_deflation_enabled = bool(deflation.get("enabled", False))
-        self.common_gradient_deflation_location = str(
-            deflation.get("location", "cross2_message")
-        )
-        self.common_gradient_deflation_alpha = float(deflation.get("alpha", 0.0))
-        if self.common_gradient_deflation_location != "cross2_message":
-            raise ValueError(
-                "Only location='cross2_message' is supported for MQ common gradient "
-                f"deflation, got {self.common_gradient_deflation_location!r}"
-            )
-        if not 0.0 <= self.common_gradient_deflation_alpha <= 1.0:
-            raise ValueError("MQ common gradient deflation alpha must be in [0,1]")
-        cross2_deflation_alpha = (
-            self.common_gradient_deflation_alpha
-            if self.common_gradient_deflation_enabled
-            else 0.0
-        )
-        self.spatial_scope_enabled = bool(scope.get("enabled", False))
-        self.spatial_scope_mode = str(scope.get("mode", "absolute"))
-        self.spatial_scope_strength = float(scope.get("strength", 0.0))
-        self.spatial_scope_relative_rho = float(scope.get("relative_rho", 0.0))
-        self.spatial_scope_sigmas = tuple(scope.get("sigmas", [0.20, 0.45, 0.90, None]))
-        self.spatial_scope_detach_centroid = bool(scope.get("detach_cross1_centroid", True))
-        if self.spatial_scope_enabled and not competitive_cross2:
-            raise ValueError("Spatial multi-scope requires competitive_cross2=True")
-        if self.spatial_scope_enabled and num_queries % 4 != 0:
-            raise ValueError("Spatial multi-scope requires num_queries divisible by 4")
-        if self.spatial_scope_strength < 0:
-            raise ValueError("Spatial multi-scope strength must be non-negative")
-        if self.spatial_scope_relative_rho < 0:
-            raise ValueError("Spatial multi-scope relative_rho must be non-negative")
-        if self.spatial_scope_mode not in ("absolute", "relative_rms"):
-            raise ValueError(
-                "Spatial multi-scope mode must be 'absolute' or 'relative_rms', got "
-                f"{self.spatial_scope_mode!r}"
-            )
-
         self.meta_queries = nn.Parameter(torch.empty(num_queries, token_dim))
         nn.init.trunc_normal_(self.meta_queries, std=0.02)
 
@@ -160,7 +118,6 @@ class AffordanceGuidedCompactorTransformer(nn.Module):
             eps=eps,
             competitive=competitive_cross2,
             competitive_temperature=competitive_temperature,
-            common_gradient_deflation_alpha=cross2_deflation_alpha,
         )
 
     def _resolve_heatmap_mode(self, heatmap_mode):
@@ -313,7 +270,7 @@ class AffordanceGuidedCompactorTransformer(nn.Module):
 
     def forward(
         self, patch_tokens, pc_pe, heatmap=None, text_tokens=None,
-        heatmap_mode=None, point_centers=None,
+        heatmap_mode=None,
     ):
         """
         Args:
@@ -333,14 +290,6 @@ class AffordanceGuidedCompactorTransformer(nn.Module):
             pc_pe,
             heatmap,
         )
-        if point_centers is not None:
-            if point_centers.shape[1] == cls_debug["original_num_tokens"]:
-                if cls_debug["dropped_cls_token"]:
-                    point_centers = point_centers[:, 1:, :]
-            elif point_centers.shape[1] != cls_debug["num_patch_tokens"]:
-                raise ValueError(
-                    "point_centers token count must match ACT tokens before or after CLS drop"
-                )
         heatmap, heatmap_source = self._build_heatmap(patch_tokens, text_tokens, heatmap)
         self._validate_inputs(patch_tokens, pc_pe, heatmap)
         heatmap = self._apply_heatmap_intervention(heatmap)
@@ -357,32 +306,12 @@ class AffordanceGuidedCompactorTransformer(nn.Module):
             heatmap_mode=mode,
         )
         queries = self.self_block2(queries)
-        scope_bias = None
-        scope_debug = None
-        if self.spatial_scope_enabled:
-            if point_centers is None:
-                raise ValueError("Spatial multi-scope requires true point_centers [B,N,3]")
-            if point_centers.shape[:2] != patch_tokens.shape[:2]:
-                raise ValueError("point_centers must align with ACT patch tokens")
-            scope_bias, scope_debug = build_spatial_scope_bias(
-                attn1,
-                point_centers,
-                self.spatial_scope_sigmas,
-                detach_centroid=self.spatial_scope_detach_centroid,
-                eps=1e-6,
-            )
-        cross2_result = self.cross_block2(
+        compact_tokens, attn2 = self.cross_block2(
             queries,
             point_tokens,
             heatmap=heatmap,
             heatmap_mode=mode,
-            attention_bias=scope_bias,
-            attention_bias_mode=self.spatial_scope_mode,
-            attention_bias_strength=self.spatial_scope_strength,
-            attention_bias_relative_rho=self.spatial_scope_relative_rho,
-            return_score_debug=self.return_debug and self.spatial_scope_enabled,
         )
-        compact_tokens, attn2 = cross2_result[:2]
 
         compact_attn = attn2.mean(dim=1)
         compact_pc_pe = torch.matmul(compact_attn, pc_pe)
@@ -401,15 +330,4 @@ class AffordanceGuidedCompactorTransformer(nn.Module):
             debug.update(cls_debug)
             if heatmap is not None:
                 debug["heatmap"] = heatmap.detach()
-            if scope_debug is not None:
-                debug["spatial_scope"] = {
-                    key: value.detach() if torch.is_tensor(value) else value
-                    for key, value in scope_debug.items()
-                }
-                debug["spatial_scope"]["raw_centered_bias"] = scope_bias.detach()
-                debug["spatial_scope"]["bias"] = cross2_result[2][
-                    "applied_attention_bias"
-                ]
-                debug["spatial_scope"].update(cross2_result[2])
-
         return compact_tokens, compact_pc_pe, debug

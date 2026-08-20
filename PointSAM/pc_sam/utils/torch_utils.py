@@ -38,7 +38,6 @@ def replace_with_fused_layernorm(module: nn.Module):
             module.register_module(name, fused_layernorm)
 
 
-#===wzy===
 def clean_state_dict(ckpt):
     if "module" in ckpt:
         state_dict = ckpt["module"]
@@ -59,4 +58,3 @@ def clean_state_dict(ckpt):
             continue
         cleaned[key] = value
     return cleaned
-#===wzy===

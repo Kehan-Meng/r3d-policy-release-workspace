@@ -356,19 +356,18 @@ class RandomScale(Transform):
 
 
 def main():
-    from datasets import load_dataset, load_from_disk
-    
+    import os
+
+    from datasets import load_dataset
+
+    hf_token = os.environ.get("HF_TOKEN")
     dataset = load_dataset(
         "SeaLab/partnet-shapenet",
-        token="YOUR_HF_TOKEN",
+        token=hf_token,
         streaming=False,
         # streaming=True,
         split="test",
     )
-    # dataset = load_from_disk("/jigu-haosu-vol/huggingface/datasets/partnet-shapenet/")
-    # dataset = dataset["test"]
-    # print(dataset)
-
     dataset = dataset.rename_columns(
         {"xyz": "coords", "rgb": "features", "mask": "gt_masks"}
     )
