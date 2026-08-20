@@ -1,0 +1,134 @@
+# Template only. Fill every null/REPLACE_ME field and set readiness/status to ready.
+config_version: 1
+name: REPLACE_ME_fixed_camera_cartesian_v1
+benchmark: real_robot
+task: REPLACE_ME
+canonical_frame: camera_optical
+require_metadata: true
+status: template_incomplete
+
+native_contract:
+  point_cloud_dim: 6
+  state_dim: 10
+  action_dim: 7
+  point_cloud_frame: camera_optical
+  state_semantics: ee_absolute_pose_xyz_rotation6d_in_robot_base_plus_gripper_width
+  action_semantics: spatial_left_delta_pose_xyz_axis_angle_in_robot_base_plus_gripper_command
+
+real_robot_contract:
+  readiness: incomplete
+  hardware:
+    robot_model: REPLACE_ME
+    robot_serial: REPLACE_ME
+    robot_description_hash: REPLACE_ME
+    arm_count: 1
+    base_frames: [robot_base]
+    ee_frames: [tool0]
+  camera:
+    mounting: fixed_external
+    serial: REPLACE_ME
+    optical_frame: camera_optical
+    optical_axis_convention: opencv_x_right_y_down_z_forward
+    resolution: [0, 0]
+    intrinsics: null               # K = [[fx,0,cx],[0,fy,cy],[0,0,1]]
+    distortion_model: REPLACE_ME   # e.g. plumb_bob / equidistant / none
+    distortion_coefficients: null
+    depth_scale_m_per_unit: null
+    depth_registered_to_color: null
+  calibration:
+    method: REPLACE_ME             # e.g. eye_to_hand_apriltag
+    artifact_sha256: REPLACE_ME
+    stored_transform_convention: T_target_from_source
+    measured_at_utc: REPLACE_ME
+    sample_count: 0
+    translation_rmse_m: null
+    rotation_rmse_deg: null
+    reprojection_rmse_px: null
+    independent_point_rmse_m: null
+    axis_alignment_min_cosine: null
+    acceptance:
+      max_translation_rmse_m: 0.005
+      max_rotation_rmse_deg: 1.0
+      max_reprojection_rmse_px: 2.0
+      max_independent_point_rmse_m: 0.005
+      min_axis_alignment_cosine: 0.99
+      min_sample_count: 15
+  timing:
+    observation_frequency_hz: null
+    control_frequency_hz: null
+    max_camera_robot_skew_s: null
+    camera_timestamp_source: REPLACE_ME
+    robot_timestamp_source: REPLACE_ME
+  controller:
+    controller_config_hash: REPLACE_ME
+    action_type: cartesian_delta_pose_spatial
+    command_frames: [robot_base]
+    translation_unit: meter
+    rotation_representation: axis_angle
+    delta_composition: left
+    gripper_semantics: REPLACE_ME
+  safety:
+    workspace_bounds_m: null       # [[xmin,xmax],[ymin,ymax],[zmin,zmax]] in robot_base
+    max_translation_step_m: null
+    max_rotation_step_rad: null
+    watchdog_timeout_s: null
+  runtime_context:
+    observation_key: frame_context
+    required_keys: []
+    matrix_keys: []
+
+transforms:
+  - name: camera_from_robot_base
+    source_frame: robot_base
+    target_frame: camera_optical
+    provider:
+      type: static
+      length_unit: meter
+      matrix: null                  # T_camera_optical_from_robot_base
+
+schemas:
+  observation: &observation
+    name: real_robot_fixed_camera_observation
+    tensors:
+      - name: point_cloud
+        key_path: point_cloud
+        expected_last_dim: 6
+        fields:
+          - {name: xyz, slice: [0, 3], kind: point, source_frame: camera_optical, target_frame: camera_optical, units: meter, preserve_zero_sentinel: true}
+          - {name: rgb, slice: [3, 6], kind: passthrough}
+      - name: agent_pos
+        key_path: agent_pos
+        expected_last_dim: 10
+        fields:
+          - {name: ee_pose, slice: [0, 9], kind: absolute_pose, source_frame: robot_base, target_frame: camera_optical, representation: xyz_rotation_6d_columns, units: meter}
+          - {name: gripper_width, slice: [9, 10], kind: scalar, units: meter}
+  action: &action
+    name: real_robot_fixed_camera_action
+    tensors:
+      - name: action
+        key_path: ""
+        expected_last_dim: 7
+        fields:
+          - {name: ee_delta, slice: [0, 6], kind: relative_pose_spatial, source_frame: robot_base, target_frame: camera_optical, representation: xyz_axis_angle, composition: left, units: meter}
+          - {name: gripper_command, slice: [6, 7], kind: scalar}
+  training:
+    name: real_robot_fixed_camera_training
+    tensors:
+      - name: point_cloud
+        key_path: point_cloud
+        expected_last_dim: 6
+        fields:
+          - {name: xyz, slice: [0, 3], kind: point, source_frame: camera_optical, target_frame: camera_optical, units: meter, preserve_zero_sentinel: true}
+          - {name: rgb, slice: [3, 6], kind: passthrough}
+      - name: agent_pos
+        key_path: agent_pos
+        expected_last_dim: 10
+        fields:
+          - {name: ee_pose, slice: [0, 9], kind: absolute_pose, source_frame: robot_base, target_frame: camera_optical, representation: xyz_rotation_6d_columns, units: meter}
+          - {name: gripper_width, slice: [9, 10], kind: scalar, units: meter}
+      - name: action
+        key_path: action
+        expected_last_dim: 7
+        fields:
+          - {name: ee_delta, slice: [0, 6], kind: relative_pose_spatial, source_frame: robot_base, target_frame: camera_optical, representation: xyz_axis_angle, composition: left, units: meter}
+          - {name: gripper_command, slice: [6, 7], kind: scalar}

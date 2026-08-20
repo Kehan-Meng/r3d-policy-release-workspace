@@ -107,6 +107,26 @@ The matching Hydra task configs are `maniskill_oc_PickCube`,
 stores the profile SHA256 and controller contract; training fails closed when
 either differs from the selected profile.
 
+## Real-Robot Preflight
+
+Vendor-neutral real-robot frame contracts live under
+`R3D/r3d/config/frame_transform/real_robot/`. Templates are provided for a
+fixed external camera, an eye-in-hand camera, and a dual-arm fixed-camera
+setup. They are intentionally incomplete and cannot pass preflight until the
+robot identity, camera calibration, timing, controller semantics, and safety
+limits are filled with measured values.
+
+```bash
+python preflight_real_robot.py \
+  --profile R3D/r3d/config/frame_transform/real_robot/my_robot_v1.yaml \
+  --output experiments/results/real_robot/my_robot_preflight.json
+```
+
+The frozen policy contract is camera-frame absolute EE pose plus gripper for
+state, and camera-frame spatial/left delta pose plus gripper for action. A
+joint, body-frame, or velocity controller requires a separate thin controller
+codec; changing YAML labels is not sufficient.
+
 Use the OC Door example with:
 
 ```bash

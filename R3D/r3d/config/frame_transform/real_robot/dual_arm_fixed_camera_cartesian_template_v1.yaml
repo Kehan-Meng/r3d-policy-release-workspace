@@ -1,0 +1,143 @@
+# Template only. Left/right arm ordering is frozen throughout state and action.
+config_version: 1
+name: REPLACE_ME_dual_arm_fixed_camera_cartesian_v1
+benchmark: real_robot
+task: REPLACE_ME
+canonical_frame: camera_optical
+require_metadata: true
+status: template_incomplete
+
+native_contract:
+  point_cloud_dim: 6
+  state_dim: 20
+  action_dim: 14
+  point_cloud_frame: camera_optical
+  state_semantics: left_pose9_gripper1_then_right_pose9_gripper1_in_respective_bases
+  action_semantics: left_spatial_delta6_gripper1_then_right_spatial_delta6_gripper1
+
+real_robot_contract:
+  readiness: incomplete
+  hardware:
+    robot_model: REPLACE_ME
+    robot_serial: REPLACE_ME
+    robot_description_hash: REPLACE_ME
+    arm_count: 2
+    base_frames: [left_base, right_base]
+    ee_frames: [left_tool0, right_tool0]
+  camera:
+    mounting: fixed_external
+    serial: REPLACE_ME
+    optical_frame: camera_optical
+    optical_axis_convention: opencv_x_right_y_down_z_forward
+    resolution: [0, 0]
+    intrinsics: null
+    distortion_model: REPLACE_ME
+    distortion_coefficients: null
+    depth_scale_m_per_unit: null
+    depth_registered_to_color: null
+  calibration:
+    method: REPLACE_ME
+    artifact_sha256: REPLACE_ME
+    stored_transform_convention: T_target_from_source
+    measured_at_utc: REPLACE_ME
+    sample_count: 0
+    translation_rmse_m: null
+    rotation_rmse_deg: null
+    reprojection_rmse_px: null
+    independent_point_rmse_m: null
+    axis_alignment_min_cosine: null
+    acceptance:
+      max_translation_rmse_m: 0.005
+      max_rotation_rmse_deg: 1.0
+      max_reprojection_rmse_px: 2.0
+      max_independent_point_rmse_m: 0.005
+      min_axis_alignment_cosine: 0.99
+      min_sample_count: 20
+  timing:
+    observation_frequency_hz: null
+    control_frequency_hz: null
+    max_camera_robot_skew_s: null
+    camera_timestamp_source: REPLACE_ME
+    robot_timestamp_source: REPLACE_ME
+  controller:
+    controller_config_hash: REPLACE_ME
+    action_type: cartesian_delta_pose_spatial
+    command_frames: [left_base, right_base]
+    translation_unit: meter
+    rotation_representation: axis_angle
+    delta_composition: left
+    gripper_semantics: REPLACE_ME
+  safety:
+    workspace_bounds_m: null
+    max_translation_step_m: null
+    max_rotation_step_rad: null
+    watchdog_timeout_s: null
+  runtime_context:
+    observation_key: frame_context
+    required_keys: []
+    matrix_keys: []
+
+transforms:
+  - name: camera_from_left_base
+    source_frame: left_base
+    target_frame: camera_optical
+    provider: {type: static, length_unit: meter, matrix: null}
+  - name: camera_from_right_base
+    source_frame: right_base
+    target_frame: camera_optical
+    provider: {type: static, length_unit: meter, matrix: null}
+
+schemas:
+  observation:
+    name: real_robot_dual_arm_observation
+    tensors:
+      - name: point_cloud
+        key_path: point_cloud
+        expected_last_dim: 6
+        fields:
+          - {name: xyz, slice: [0, 3], kind: point, source_frame: camera_optical, target_frame: camera_optical, units: meter, preserve_zero_sentinel: true}
+          - {name: rgb, slice: [3, 6], kind: passthrough}
+      - name: agent_pos
+        key_path: agent_pos
+        expected_last_dim: 20
+        fields:
+          - {name: left_ee_pose, slice: [0, 9], kind: absolute_pose, source_frame: left_base, target_frame: camera_optical, representation: xyz_rotation_6d_columns, units: meter}
+          - {name: left_gripper_width, slice: [9, 10], kind: scalar, units: meter}
+          - {name: right_ee_pose, slice: [10, 19], kind: absolute_pose, source_frame: right_base, target_frame: camera_optical, representation: xyz_rotation_6d_columns, units: meter}
+          - {name: right_gripper_width, slice: [19, 20], kind: scalar, units: meter}
+  action:
+    name: real_robot_dual_arm_action
+    tensors:
+      - name: action
+        key_path: ""
+        expected_last_dim: 14
+        fields:
+          - {name: left_ee_delta, slice: [0, 6], kind: relative_pose_spatial, source_frame: left_base, target_frame: camera_optical, representation: xyz_axis_angle, composition: left, units: meter}
+          - {name: left_gripper_command, slice: [6, 7], kind: scalar}
+          - {name: right_ee_delta, slice: [7, 13], kind: relative_pose_spatial, source_frame: right_base, target_frame: camera_optical, representation: xyz_axis_angle, composition: left, units: meter}
+          - {name: right_gripper_command, slice: [13, 14], kind: scalar}
+  training:
+    name: real_robot_dual_arm_training
+    tensors:
+      - name: point_cloud
+        key_path: point_cloud
+        expected_last_dim: 6
+        fields:
+          - {name: xyz, slice: [0, 3], kind: point, source_frame: camera_optical, target_frame: camera_optical, units: meter, preserve_zero_sentinel: true}
+          - {name: rgb, slice: [3, 6], kind: passthrough}
+      - name: agent_pos
+        key_path: agent_pos
+        expected_last_dim: 20
+        fields:
+          - {name: left_ee_pose, slice: [0, 9], kind: absolute_pose, source_frame: left_base, target_frame: camera_optical, representation: xyz_rotation_6d_columns, units: meter}
+          - {name: left_gripper_width, slice: [9, 10], kind: scalar, units: meter}
+          - {name: right_ee_pose, slice: [10, 19], kind: absolute_pose, source_frame: right_base, target_frame: camera_optical, representation: xyz_rotation_6d_columns, units: meter}
+          - {name: right_gripper_width, slice: [19, 20], kind: scalar, units: meter}
+      - name: action
+        key_path: action
+        expected_last_dim: 14
+        fields:
+          - {name: left_ee_delta, slice: [0, 6], kind: relative_pose_spatial, source_frame: left_base, target_frame: camera_optical, representation: xyz_axis_angle, composition: left, units: meter}
+          - {name: left_gripper_command, slice: [6, 7], kind: scalar}
+          - {name: right_ee_delta, slice: [7, 13], kind: relative_pose_spatial, source_frame: right_base, target_frame: camera_optical, representation: xyz_axis_angle, composition: left, units: meter}
+          - {name: right_gripper_command, slice: [13, 14], kind: scalar}

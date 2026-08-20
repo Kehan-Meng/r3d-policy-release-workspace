@@ -13,6 +13,11 @@ from .providers import (
     TransformProvider,
 )
 from .registry import build_adapter
+from .real_robot import (
+    RealRobotPreflightReport,
+    RealRobotRuntimeContextBuilder,
+    preflight_real_robot_profile,
+)
 from .schema import (
     CanonicalFrameProfile,
     FieldSpec,
@@ -32,6 +37,8 @@ __all__ = [
     "FieldSpec",
     "FrameMetadata",
     "RuntimeTransformProvider",
+    "RealRobotPreflightReport",
+    "RealRobotRuntimeContextBuilder",
     "SampleSchema",
     "StaticTransformProvider",
     "TensorSpec",
@@ -39,4 +46,5 @@ __all__ = [
     "TransformGraph",
     "TransformProvider",
     "build_adapter",
+    "preflight_real_robot_profile",
 ]
