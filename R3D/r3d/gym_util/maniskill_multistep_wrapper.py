@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 from collections import defaultdict, deque
-from mani_skill2.utils.eval_3dpolicy import Maniskill2Env
 import dill
 
 
@@ -89,9 +88,15 @@ class MultiStepWrapper():
             n_action_steps, 
             max_episode_steps=None,
             save_video=True,
+            camera_ee_contract=False,
+            camera_profile_path=None,
         ):
+        from r3d.env.maniskill_camera_ee_env import Maniskill2Env
+
         self.env = Maniskill2Env(
-            env_name, down_sample_point, save_dir, save_video=save_video
+            env_name, down_sample_point, save_dir, save_video=save_video,
+            camera_ee_contract=camera_ee_contract,
+            camera_profile_path=camera_profile_path,
         )
         self.max_episode_steps = max_episode_steps
         self.n_obs_steps = n_obs_steps

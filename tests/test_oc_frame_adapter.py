@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+import hashlib
 import unittest
 
 import numpy as np
+import yaml
 
 from r3d.model.geometry.benchmark import load_profile_bundle
 
@@ -81,6 +83,32 @@ class TestObservationCentricFrameProfiles(unittest.TestCase):
             policy.data, policy.metadata
         )
         np.testing.assert_allclose(recovered.data, action, atol=2e-15)
+
+    def test_maniskill_camera_ee_task_contracts_match_profiles(self):
+        expected = {
+            "PickCube": (14, "pickcube"),
+            "StackCube": (11, "stackcube"),
+            "PegInsertionSide": (11, "peginsertionside"),
+        }
+        task_root = PROFILE_ROOT.parent / "task"
+        for task, (state_dim, profile_stem) in expected.items():
+            with self.subTest(task=task):
+                config = yaml.safe_load(
+                    (task_root / f"maniskill_oc_{task}.yaml").read_text()
+                )
+                dataset = config["dataset"]
+                profile = Path(__file__).resolve().parents[1] / dataset["camera_profile_path"]
+                digest = hashlib.sha256(profile.read_bytes()).hexdigest()
+                self.assertTrue(dataset["camera_ee_contract"])
+                self.assertEqual(dataset["camera_profile_sha256"], digest)
+                self.assertEqual(config["shape_meta"]["obs"]["agent_pos"]["shape"], [state_dim])
+                self.assertEqual(config["shape_meta"]["action"]["shape"], [7])
+                self.assertIn(profile_stem, profile.name)
+
+    def test_robotwin_has_no_coordinate_conversion_contract(self):
+        root = Path(__file__).resolve().parents[1] / "R3D" / "r3d"
+        self.assertFalse(any((root / "model" / "cartesian_policy").glob("*.py")))
+        self.assertFalse((root / "dataset" / "robotwin2_ee_camera_dataset.py").exists())
 
 
 if __name__ == "__main__":

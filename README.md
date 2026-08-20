@@ -81,11 +81,31 @@ training actions into the policy frame before normalization, stores the
 resolved profile hash in checkpoints, and converts predicted actions back to
 the benchmark-native contract during rollout.
 
-The public profiles currently cover Adroit Door/Hammer/Pen, MetaWorld's
-`corner2` camera contract, and ManiSkill2 PickCube/StackCube/PegInsertionSide.
-For joint-position benchmarks, Cartesian observations are re-expressed while
-joint actions remain unchanged. ManiSkill2 profiles also preserve all-zero
-point-cloud padding through translated camera transforms.
+The public profiles cover Adroit Door/Hammer/Pen, MetaWorld's `corner2`
+camera contract, and ManiSkill2 PickCube/StackCube/PegInsertionSide. The two
+fully supported observation-centric control paths are:
+
+- **MetaWorld:** world-frame Cartesian observations/actions are rigidly
+  re-expressed in the camera frame and actions are rotated back before
+  `env.step()`.
+- **ManiSkill2 Camera-EE:** native joint demonstrations are converted offline
+  to camera-frame TCP state and 7D target-delta actions. Evaluation converts
+  the predicted target pose back through the official
+  `pd_ee_target_delta_pose` controller. This is geometrically reversible, but
+  it intentionally does not preserve joint-space null-space information.
+
+Build a validated ManiSkill2 Camera-EE dataset with:
+
+```bash
+python R3D/data_generation/build_maniskill2_camera_ee_zarr.py \
+  --task PickCube \
+  --source R3D/data/PickCube-v0.zarr
+```
+
+The matching Hydra task configs are `maniskill_oc_PickCube`,
+`maniskill_oc_StackCube`, and `maniskill_oc_PegInsertionSide`. Converted data
+stores the profile SHA256 and controller contract; training fails closed when
+either differs from the selected profile.
 
 Use the OC Door example with:
 

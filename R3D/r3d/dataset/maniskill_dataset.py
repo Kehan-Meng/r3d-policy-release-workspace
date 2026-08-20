@@ -3,6 +3,9 @@ import torch
 import numpy as np
 import os
 import copy
+import hashlib
+import json
+import zarr
 from r3d.common.pytorch_util import dict_apply
 from r3d.common.replay_buffer import ReplayBuffer
 from r3d.common.sampler import (
@@ -117,15 +120,55 @@ class ManiskillDataset(BaseDataset):
             text_json_path=None,
             text_command=None,
             return_text=False,
-            strict_text_lookup=False
+            strict_text_lookup=False,
+            camera_ee_contract=False,
+            camera_profile_path=None,
+            camera_profile_sha256=None,
             ):
         super().__init__()
         self.zarr_path = str(zarr_path)
+        self.camera_ee_contract = bool(camera_ee_contract)
+        self.camera_profile_path = camera_profile_path
 
         # auxiliary task
         self.use_target_ee = use_target_ee
 
-        if self.use_target_ee:
+        if self.camera_ee_contract and self.use_target_ee:
+            raise ValueError("camera_ee_contract and use_target_ee are mutually exclusive")
+        if self.camera_ee_contract:
+            root = zarr.open(self.zarr_path, mode="r")
+            if root.attrs.get("contract_version") != "maniskill2_camera_ee_v1":
+                raise ValueError("camera_ee_contract requires maniskill2_camera_ee_v1 data")
+            if root.attrs.get("validation_status") != "passed":
+                raise ValueError("camera-EE Zarr has not passed conversion validation")
+            if not camera_profile_path or not camera_profile_sha256:
+                raise ValueError("camera_ee_contract requires a profile path and SHA256")
+            with open(camera_profile_path, "rb") as handle:
+                actual_hash = hashlib.sha256(handle.read()).hexdigest()
+            if actual_hash != camera_profile_sha256 or root.attrs.get(
+                "camera_profile_sha256"
+            ) != camera_profile_sha256:
+                raise ValueError("camera-EE profile hash mismatch")
+            contract = json.loads(root.attrs.get("contract_json", "{}"))
+            if contract.get("controller") != "pd_ee_target_delta_pose":
+                raise ValueError(f"Unexpected camera-EE controller contract: {contract}")
+            expected_state_dim = 14 if str(task_name).startswith("PickCube") else 11
+            shapes = {
+                "state": tuple(root["data/state"].shape),
+                "action": tuple(root["data/action"].shape),
+                "target_ee": tuple(root["data/target_ee"].shape),
+            }
+            if (
+                shapes["state"][1] != expected_state_dim
+                or shapes["action"][1] != 7
+                or shapes["target_ee"][1] != 9
+            ):
+                raise ValueError(f"Invalid camera-EE array shapes: {shapes}")
+            cprint(
+                f"Camera-EE contract enabled: state={expected_state_dim}, action=7",
+                "green",
+            )
+        elif self.use_target_ee:
             cprint("--------------------------", "cyan")
             cprint("EE Auxiliary Task enabled: action dim = joint + ee", "cyan")
             cprint("--------------------------", "cyan")
@@ -201,6 +244,10 @@ class ManiskillDataset(BaseDataset):
 
     def get_normalizer(self, mode='limits', **kwargs):
         if self.frame_transform_enabled:
+            if self.camera_ee_contract:
+                raise ValueError(
+                    "camera-EE data is already canonical; frame_adapter must be disabled"
+                )
             if self.use_target_ee:
                 raise ValueError(
                     "ManiSkill2 canonical-frame profiles support the executed joint8 "

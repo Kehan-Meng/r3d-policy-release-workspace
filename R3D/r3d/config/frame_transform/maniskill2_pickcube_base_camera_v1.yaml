@@ -11,8 +11,9 @@ data_operation:
   point_selection_preserved: true
   rerendered_from_depth: false
 provenance:
-  point_cloud_wrapper: R3D/r3d/env/maniskill2/mani_skill2/utils/wrappers/observation.py
-  camera_source: R3D/r3d/env/maniskill2/mani_skill2/envs/pick_and_place/base_env.py
+  source_package: mani_skill2
+  point_cloud_wrapper: mani_skill2.utils.wrappers.observation
+  camera_source: mani_skill2.envs.pick_and_place.base_env
   camera_name: base_camera
   point_cloud_sources: [base_camera, hand_camera]
   camera_static_across_audited_seeds: true

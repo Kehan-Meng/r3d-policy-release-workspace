@@ -325,6 +325,37 @@ def build_runner(
 
         runner_cfg = nested_cfg_get(train_cfg, ("task", "env_runner"), None)
         env_task_name = str(cfg_get(runner_cfg, "task_name", task_name))
+        camera_ee_contract = bool(
+            cfg_get(runner_cfg, "camera_ee_contract", False)
+            or nested_cfg_get(
+                train_cfg, ("task", "dataset", "camera_ee_contract"), False
+            )
+        )
+        camera_profile_path = (
+            cfg_get(runner_cfg, "camera_profile_path", None)
+            or nested_cfg_get(
+                train_cfg, ("task", "dataset", "camera_profile_path"), None
+            )
+        )
+        if camera_profile_path:
+            camera_profile_path = str(resolve_repo_path(camera_profile_path))
+        if camera_ee_contract and not camera_profile_path:
+            raise ValueError("camera-EE evaluation requires camera_profile_path")
+        if camera_ee_contract:
+            import hashlib
+
+            expected_hash = nested_cfg_get(
+                train_cfg, ("task", "dataset", "camera_profile_sha256"), None
+            )
+            if not expected_hash:
+                raise ValueError("camera-EE checkpoint lacks camera_profile_sha256")
+            with open(camera_profile_path, "rb") as handle:
+                actual_hash = hashlib.sha256(handle.read()).hexdigest()
+            if actual_hash != expected_hash:
+                raise ValueError(
+                    "camera-EE profile hash mismatch: "
+                    f"checkpoint={expected_hash}, file={actual_hash}"
+                )
         return ManiskillRunner(
             output_dir=str(output_dir),
             eval_episodes=eval_episodes,
@@ -339,6 +370,8 @@ def build_runner(
             save_video=not fast,
             deterministic_eval_seed=eval_seed,
             episode_start=episode_start,
+            camera_ee_contract=camera_ee_contract,
+            camera_profile_path=camera_profile_path,
         )
 
     if is_franka_grasp_runner(train_cfg):

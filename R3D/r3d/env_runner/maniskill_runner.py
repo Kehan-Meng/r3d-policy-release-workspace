@@ -29,10 +29,11 @@ class ManiskillRunner(BaseRunner):
                  save_video=True,
                  deterministic_eval_seed=100000,
                  episode_start=0,
+                 camera_ee_contract=False,
+                 camera_profile_path=None,
                  ):
         self.task_name = task_name
 
-        from mani_skill2.utils.eval_3dpolicy import Maniskill2Env
         from r3d.gym_util.maniskill_multistep_wrapper import MultiStepWrapper
 
         def env_fn(task_name):
@@ -44,6 +45,8 @@ class ManiskillRunner(BaseRunner):
                 n_action_steps=n_action_steps,
                 max_episode_steps=max_steps,
                 save_video=save_video,
+                camera_ee_contract=camera_ee_contract,
+                camera_profile_path=camera_profile_path,
             )
         self.eval_episodes = eval_episodes
         self.env = env_fn(self.task_name)
