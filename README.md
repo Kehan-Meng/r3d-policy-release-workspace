@@ -60,10 +60,9 @@ python download_pretrained.py
 
 The script writes the checkpoint to
 `pretrained/twowayca-affordance/model.safetensors`, which is the relative path
-used by the public experiment configs. The ModelScope repository is currently
-private, so the downloading account must be granted access and authenticated;
-`MODELSCOPE_API_TOKEN` can also be supplied through the environment. The
-expected SHA256 is
+used by the public experiment configs. The ModelScope repository is public and
+does not require authentication. `MODELSCOPE_API_TOKEN` remains supported for
+authenticated or mirrored deployments. The expected SHA256 is
 `76e1daaca15d617288186e48af314250212bb906ae5e4bcea18330323c7d8951`.
 
 ## Entry Points
