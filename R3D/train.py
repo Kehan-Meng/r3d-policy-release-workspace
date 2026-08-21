@@ -2,90 +2,41 @@ import os
 import copy
 import random
 import time
-import threading
-import datetime
 import pathlib
 import json
 import re
 import hydra
 import torch
 import torch.distributed as dist
-import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 from torch.amp import autocast
 from torch.utils.data import DataLoader
-import dill
 import wandb
 import tqdm
 import numpy as np
-import shutil
 from termcolor import cprint
 from omegaconf import OmegaConf
-from hydra.core.hydra_config import HydraConfig
 from r3d.policy.dp3 import DP3
 from r3d.dataset.base_dataset import BaseDataset
 from r3d.env_runner.base_runner import BaseRunner
 from r3d.common.checkpoint_util import TopKCheckpointManager
-from r3d.common.pytorch_util import dict_apply, optimizer_to
+from r3d.common.pytorch_util import optimizer_to
 from r3d.model.diffusion.ema_model import EMAModel
 from r3d.model.common.lr_scheduler import get_scheduler
+from r3d.training.checkpointing import CheckpointMixin
+from r3d.training.evaluation import WorkspaceEvaluationMixin
+from r3d.training.utils import (
+    batch_to_device,
+    cleanup_ddp,
+    is_main_process,
+    json_safe,
+    setup_ddp,
+)
 
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 
-def setup_ddp(rank, world_size):
-    """Initialize DDP environment"""
-    # Note: MASTER_ADDR and MASTER_PORT should be set by torchrun
-    dist.init_process_group("nccl", rank=rank, world_size=world_size, timeout=datetime.timedelta(hours=10))
-    torch.cuda.set_device(rank)
-
-def cleanup_ddp():
-    """Clean up DDP environment"""
-    if dist.is_initialized():
-        dist.destroy_process_group()
-
-def is_main_process():
-    """Check if current process is the main process"""
-    return not dist.is_initialized() or dist.get_rank() == 0
-
-def batch_to_device(batch, device):
-    """Move tensor fields to device and keep metadata fields such as text unchanged."""
-    return dict_apply(
-        batch,
-        lambda x: x.to(device, non_blocking=True) if torch.is_tensor(x) else x,
-    )
-
-def _copy_to_cpu(state_dict):
-    """Copy state dict to CPU"""
-    cpu_state_dict = {}
-    for key, value in state_dict.items():
-        if torch.is_tensor(value):
-            cpu_state_dict[key] = value.cpu()
-        else:
-            cpu_state_dict[key] = value
-    return cpu_state_dict
-
-
-def _json_safe(value):
-    if torch.is_tensor(value):
-        if value.numel() == 1:
-            return value.detach().cpu().item()
-        return value.detach().cpu().tolist()
-    if isinstance(value, np.ndarray):
-        return value.tolist()
-    if isinstance(value, np.generic):
-        return value.item()
-    if isinstance(value, dict):
-        return {key: _json_safe(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_json_safe(item) for item in value]
-    try:
-        json.dumps(value)
-        return value
-    except TypeError:
-        return str(value)
-
-class TrainDP3Workspace:
+class TrainDP3Workspace(CheckpointMixin, WorkspaceEvaluationMixin):
     include_keys = ['global_step', 'epoch']
     exclude_keys = tuple()
 
@@ -646,7 +597,7 @@ class TrainDP3Workspace:
                 wandb_run.log(step_log, step=self.global_step)
             if is_main_process():
                 with open(log_path, "a", encoding="utf-8") as f:
-                    f.write(json.dumps(_json_safe(step_log), ensure_ascii=False) + "\n")
+                    f.write(json.dumps(json_safe(step_log), ensure_ascii=False) + "\n")
             self.global_step += 1
             self.epoch += 1
             del step_log
@@ -654,333 +605,6 @@ class TrainDP3Workspace:
         # Clean up DDP
         if self.use_ddp:
             cleanup_ddp()
-
-    def eval(self):
-        # load the latest checkpoint
-        cfg = copy.deepcopy(self.cfg)
-
-        # W&B is optional; evaluation results are always retained locally.
-        wandb_run = None
-        wandb_enabled = str(cfg.logging.get('mode', 'online')).lower() != 'disabled'
-        if wandb_enabled:
-            cprint("-----------------------------", "yellow")
-            cprint(f"[WandB Eval] group: {cfg.logging.group}_eval", "yellow")
-            cprint(f"[WandB Eval] name: {cfg.logging.name}_eval", "yellow")
-            cprint("-----------------------------", "yellow")
-            wandb_run = wandb.init(
-                dir=str(self.output_dir),
-                config=OmegaConf.to_container(cfg, resolve=True),
-                group=f"{cfg.logging.group}_eval",
-                name=f"{cfg.logging.name}_eval",
-                project="maniskill eval",
-                tags=cfg.logging.get('tags', []) + ['evaluation']
-            )
-            wandb.config.update(
-                {
-                    "output_dir": self.output_dir,
-                    "eval_mode": True
-                }
-            )
-        else:
-            cprint("[WandB Eval] disabled", "yellow")
-
-    
-        # configure env
-        env_runner: BaseRunner
-        env_runner = hydra.utils.instantiate(
-            cfg.task.env_runner,
-            output_dir=self.output_dir)
-        assert isinstance(env_runner, BaseRunner)
-
-        start_epoch = 50
-        end_epoch = 150
-        epoch_interval = 50
-
-        epochs_to_eval = list(range(start_epoch, end_epoch + 1, epoch_interval))
-        
-        # Store all results
-        all_results = {}
-        
-        for epoch_tag in epochs_to_eval:
-            cprint(f"\n{'='*60}", 'cyan')
-            cprint(f"Evaluating checkpoint: {epoch_tag}", 'cyan')
-            cprint(f"{'='*60}", 'cyan')
-            
-            # Load checkpoint
-            lastest_ckpt_path = self.get_checkpoint_path(tag=str(epoch_tag))
-            
-            if not lastest_ckpt_path.is_file():
-                cprint(f"Checkpoint {lastest_ckpt_path} not found, skipping...", 'red')
-                continue
-                
-            cprint(f"Loading checkpoint {lastest_ckpt_path}", 'magenta')
-            self.load_checkpoint(path=lastest_ckpt_path)
-            
-            # Prepare policy
-            policy = self.model
-            if cfg.training.use_ema:
-                policy = self.ema_model
-            policy.eval()
-            policy.cuda()
-
-            from r3d.env_runner.frame_adapter_wrapper import (
-                maybe_wrap_policy_for_environment,
-            )
-            policy = maybe_wrap_policy_for_environment(
-                policy,
-                cfg.get('frame_adapter', None),
-                checkpoint_metadata=self.frame_adapter_checkpoint_metadata,
-                require_checkpoint_metadata=bool(
-                    (cfg.get('frame_adapter', None) or {}).get('enabled', False)
-                ),
-            )
-            
-            # Run evaluation
-            runner_log = env_runner.run(policy)
-            
-            # Print results for this checkpoint
-            cprint(f"\n---------------- Eval Results (Epoch {epoch_tag}) --------------", 'magenta')
-            for key, value in runner_log.items():
-                if isinstance(value, float):
-                    cprint(f"{key}: {value:.4f}", 'magenta')
-            
-            # Store results
-            all_results[str(epoch_tag)] = runner_log
-            
-            # Log to wandb
-            wandb_log_dict = {
-                'eval_epoch': epoch_tag,
-            }
-            for key, value in runner_log.items():
-                if isinstance(value, (int, float)):
-                    wandb_log_dict[f'eval/{key}'] = value
-            
-            if wandb_run is not None:
-                wandb_run.log(wandb_log_dict, step=epoch_tag)
-        
-        # Print summary
-        cprint(f"\n{'='*60}", 'green')
-        cprint(f"Evaluation Summary", 'green')
-        cprint(f"{'='*60}", 'green')
-        for epoch_tag, results in all_results.items():
-            cprint(f"\nEpoch {epoch_tag}:", 'yellow')
-            for key, value in results.items():
-                if isinstance(value, float):
-                    cprint(f"  {key}: {value:.4f}", 'yellow')
-        
-        # Create summary table for wandb
-        summary_data = []
-        for epoch_tag, results in all_results.items():
-            row = {'epoch': int(epoch_tag)}
-            for key, value in results.items():
-                if isinstance(value, (int, float)):
-                    row[key] = value
-            summary_data.append(row)
-        
-        # Log summary table to wandb
-        if summary_data and wandb_run is not None:
-            import pandas as pd
-            summary_df = pd.DataFrame(summary_data)
-            wandb_run.log({"eval_summary_table": wandb.Table(dataframe=summary_df)})
-            cprint(f"\nLogged evaluation summary to wandb", 'green')
-        
-        # Finish wandb run
-        if wandb_run is not None:
-            wandb_run.finish()
-            cprint(f"\nWandB run finished", 'green')
-
-    def get_policy(self, cfg, checkpoint_num=3000):
-        # load the latest checkpoint
-        cfg = copy.deepcopy(self.cfg)
-
-        ckpt_file = self.get_checkpoint_path(tag=str(checkpoint_num))
-        assert ckpt_file.is_file(), f"ckpt file doesn't exist, {ckpt_file}"
-        
-        if ckpt_file.is_file():
-            cprint(f"Resuming from checkpoint {ckpt_file}", 'magenta')
-            self.load_checkpoint(path=ckpt_file)
-        
-        policy = self.model
-        if cfg.training.use_ema:
-            policy = self.ema_model
-        policy.eval()
-        policy.cuda()
-        from r3d.env_runner.frame_adapter_wrapper import (
-            maybe_wrap_policy_for_environment,
-        )
-        return maybe_wrap_policy_for_environment(
-            policy,
-            cfg.get('frame_adapter', None),
-            checkpoint_metadata=self.frame_adapter_checkpoint_metadata,
-            require_checkpoint_metadata=bool(
-                (cfg.get('frame_adapter', None) or {}).get('enabled', False)
-            ),
-        )
-
-    @property
-    def output_dir(self):
-        output_dir = self._output_dir
-        if output_dir is None:
-            output_dir = HydraConfig.get().runtime.output_dir
-        return output_dir
-
-    def save_checkpoint(self, path=None, tag='latest',
-            exclude_keys=None,
-            include_keys=None,
-            use_thread=False):
-        print('saved in ', path)
-        if path is None:
-            path = pathlib.Path(self.output_dir).joinpath('checkpoints', f'{tag}.ckpt')
-        else:
-            path = pathlib.Path(path)
-        if exclude_keys is None:
-            exclude_keys = tuple(self.exclude_keys)
-        if include_keys is None:
-            include_keys = tuple(self.include_keys) + ('_output_dir',)
-
-        path.parent.mkdir(parents=False, exist_ok=True)
-        payload = {
-            'cfg': self.cfg,
-            'state_dicts': dict(),
-            'pickles': dict(),
-            'frame_adapter': copy.deepcopy(
-                self.frame_adapter_checkpoint_metadata
-                or {'frame_adapter_enabled': False}
-            ),
-        }
-
-        for key, value in self.__dict__.items():
-            if hasattr(value, 'state_dict') and hasattr(value, 'load_state_dict'):
-                # modules, optimizers and samplers etc
-                if key not in exclude_keys:
-                    state_dict = value.state_dict()
-
-                    # Remove 'module.' prefix from DDP wrapped models
-                    if key == 'model' and self.use_ddp and hasattr(value, 'module'):
-                        # Create a new state dict without 'module.' prefix
-                        new_state_dict = {}
-                        for k, v in state_dict.items():
-                            if k.startswith('module.'):
-                                new_state_dict[k[7:]] = v  # Remove 'module.' prefix
-                            else:
-                                new_state_dict[k] = v
-                        state_dict = new_state_dict
-
-                    if use_thread:
-                        payload['state_dicts'][key] = _copy_to_cpu(state_dict)
-                    else:
-                        payload['state_dicts'][key] = state_dict
-            elif key in include_keys:
-                payload['pickles'][key] = dill.dumps(value)
-        if use_thread:
-            self._saving_thread = threading.Thread(
-                target=lambda : torch.save(payload, path.open('wb'), pickle_module=dill))
-            self._saving_thread.start()
-        else:
-            torch.save(payload, path.open('wb'), pickle_module=dill)
-        
-        del payload
-        torch.cuda.empty_cache()
-        return str(path.absolute())
-
-    def get_checkpoint_path(self, tag='latest'):
-        if tag:
-            return pathlib.Path(self.output_dir).joinpath('checkpoints', f'{tag}.ckpt')
-        elif tag == 'best':
-            # the checkpoints are saved as format: epoch={}-test_mean_score={}.ckpt
-            # find the best checkpoint
-            checkpoint_dir = pathlib.Path(self.output_dir).joinpath('checkpoints')
-            all_checkpoints = os.listdir(checkpoint_dir)
-            best_ckpt = None
-            best_score = -1e10
-            for ckpt in all_checkpoints:
-                if 'latest' in ckpt:
-                    continue
-                score = float(ckpt.split('test_mean_score=')[1].split('.ckpt')[0])
-                if score > best_score:
-                    best_ckpt = ckpt
-                    best_score = score
-            return pathlib.Path(self.output_dir).joinpath('checkpoints', best_ckpt)
-        else:
-            raise NotImplementedError(f"tag {tag} not implemented")
-
-    def load_payload(self, payload, exclude_keys=None, include_keys=None, **kwargs):
-        if exclude_keys is None:
-            exclude_keys = tuple()
-        if include_keys is None:
-            include_keys = payload['pickles'].keys()
-
-        self.frame_adapter_checkpoint_metadata = copy.deepcopy(
-            payload.get('frame_adapter', {'frame_adapter_enabled': False})
-        )
-
-        for key, value in payload['state_dicts'].items():
-            if key not in exclude_keys:
-                try:
-                    self.__dict__[key].load_state_dict(value, strict=False, **kwargs)
-                except TypeError:
-                    self.__dict__[key].load_state_dict(value, **kwargs)
-        for key in include_keys:
-            if key in payload['pickles']:
-                self.__dict__[key] = dill.loads(payload['pickles'][key])
-
-        from r3d.env_runner.frame_adapter_wrapper import (
-            validate_frame_checkpoint_metadata,
-        )
-        frame_config = self.cfg.get('frame_adapter', None)
-        validate_frame_checkpoint_metadata(
-            frame_config,
-            self.frame_adapter_checkpoint_metadata,
-            normalizer=getattr(self.model, 'normalizer', None),
-            require_checkpoint_metadata=bool(
-                (frame_config or {}).get('enabled', False)
-            ),
-        )
-
-    def load_checkpoint(self, path=None, tag='latest',
-            exclude_keys=None, 
-            include_keys=None, 
-            **kwargs):
-        if path is None:
-            path = self.get_checkpoint_path(tag=tag)
-        else:
-            path = pathlib.Path(path)
-        payload = torch.load(path.open('rb'), pickle_module=dill, map_location='cpu')
-        self.load_payload(payload, 
-            exclude_keys=exclude_keys, 
-            include_keys=include_keys)
-        return payload
-
-    @classmethod
-    def create_from_checkpoint(cls, path,
-            exclude_keys=None, 
-            include_keys=None,
-            **kwargs):
-        payload = torch.load(open(path, 'rb'), pickle_module=dill)
-        instance = cls(payload['cfg'])
-        instance.load_payload(
-            payload=payload, 
-            exclude_keys=exclude_keys,
-            include_keys=include_keys,
-            **kwargs)
-        return instance
-
-    def save_snapshot(self, tag='latest'):
-        """
-        Quick loading and saving for reserach, saves full state of the workspace.
-
-        However, loading a snapshot assumes the code stays exactly the same.
-        Use save_checkpoint for long-term storage.
-        """
-        path = pathlib.Path(self.output_dir).joinpath('snapshots', f'{tag}.pkl')
-        path.parent.mkdir(parents=False, exist_ok=True)
-        torch.save(self, path.open('wb'), pickle_module=dill)
-        return str(path.absolute())
-
-    @classmethod
-    def create_from_snapshot(cls, path):
-        return torch.load(open(path, 'rb'), pickle_module=dill)
-
 
 @hydra.main(
     version_base=None,
