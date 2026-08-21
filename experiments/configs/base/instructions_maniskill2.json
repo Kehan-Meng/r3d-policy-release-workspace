@@ -1,0 +1,5 @@
+{
+  "PickCube-v0": "Pick up the cube and move it to the target position.",
+  "StackCube-v0": "Pick up one cube and stack it on the other cube.",
+  "PegInsertionSide-v0": "Insert the peg into the side hole."
+}

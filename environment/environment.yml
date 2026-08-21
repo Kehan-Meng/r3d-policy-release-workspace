@@ -5,6 +5,9 @@ channels:
   - conda-forge
 dependencies:
   - python=3.10
+  - pytorch=2.4.1
+  - torchvision=0.19.1
+  - pytorch-cuda=12.1
   - pip
   - setuptools>=68
   - wheel

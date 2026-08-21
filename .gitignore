@@ -24,6 +24,10 @@ outputs/
 videos/
 *.log
 
+# Benchmark checkouts installed by environment/install_benchmarks.sh
+third_party/r3d_benchmarks/
+third_party/robotwin2/
+
 # Model and dataset artifacts
 *.ckpt
 *.pt
@@ -43,4 +47,3 @@ experiments/results/*
 # OS files
 .DS_Store
 Thumbs.db
-

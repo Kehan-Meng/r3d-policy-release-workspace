@@ -24,14 +24,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import gymnasium as gym
 import numpy as np
 import yaml
 import zarr
 from numcodecs import Blosc
-
-import mani_skill2.envs  # noqa: F401 - registers environments
-
 
 TASKS = {
     "PickCube": {
@@ -175,6 +171,17 @@ def _episode_bounds(episode_ends: np.ndarray, count: int | None) -> tuple[list[t
 
 
 def _make_fk(task: str):
+    # Imported lazily so --help and offline profile inspection do not require
+    # the benchmark runtime.
+    try:
+        import gymnasium as gym
+        import mani_skill2.envs  # noqa: F401 - registers environments
+    except ImportError as exc:
+        raise RuntimeError(
+            "ManiSkill2 is required for FK conversion. Run "
+            "environment/install_benchmarks.sh maniskill2 first."
+        ) from exc
+
     env_id = TASKS[task]["env_id"]
     env = gym.make(
         env_id,

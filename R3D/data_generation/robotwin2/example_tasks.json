@@ -1,0 +1,29 @@
+{
+  "description": "RoboTwin2 three-task set for R3D: two easy tasks and one hard task.",
+  "tasks": [
+    {
+      "task_name": "move_playingcard_away",
+      "display_name": "Move Card",
+      "difficulty": "easy",
+      "setting": "demo_clean",
+      "expert_data_num": 50,
+      "zarr_path": "R3D/data/move_playingcard_away-demo_clean-50.zarr"
+    },
+    {
+      "task_name": "beat_block_hammer",
+      "display_name": "Beat Hammer",
+      "difficulty": "easy",
+      "setting": "demo_clean",
+      "expert_data_num": 50,
+      "zarr_path": "R3D/data/beat_block_hammer-demo_clean-50.zarr"
+    },
+    {
+      "task_name": "lift_pot",
+      "display_name": "Lift Pot",
+      "difficulty": "hard",
+      "setting": "demo_randomized",
+      "expert_data_num": 50,
+      "zarr_path": "R3D/data/lift_pot-demo_randomized-50.zarr"
+    }
+  ]
+}

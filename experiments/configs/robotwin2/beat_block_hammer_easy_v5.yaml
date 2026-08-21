@@ -1,0 +1,46 @@
+extends: ../adroit/door_v5_masked_cosine.yaml
+
+experiment:
+  name: robotwin2_beat_block_hammer_easy_v5
+  output_dir: outputs/robotwin2_beat_block_hammer_easy_v5
+  results_dir: experiments/results/robotwin2_beat_block_hammer_easy_v5
+
+hydra:
+  config_name: r3d_robotwin2.yaml
+
+task:
+  config: robotwin2_demo_task
+  name: beat_block_hammer
+  setting: demo_clean
+  instruction_type: unseen
+  num_points: 1024
+
+data:
+  train_zarr_path: R3D/data/beat_block_hammer-demo_clean-50.zarr
+  text_json_path: experiments/configs/base/instruction_bank_robotwin2.json
+  task_setting: demo_clean
+  instruction_type: unseen
+
+training:
+  num_epochs: 1001
+  batch_size: 128
+  val_batch_size: 64
+  gradient_accumulate_every: 2
+  val_every: 20
+
+eval:
+  task_names: [beat_block_hammer]
+  task_settings:
+    beat_block_hammer: demo_clean
+  eval_episodes: 100
+
+instruction_aug:
+  enabled: true
+  bank_path: experiments/configs/base/instruction_bank_robotwin2.json
+  apply_in_train: true
+  apply_in_val: false
+
+report:
+  benchmark: robotwin2
+  demonstration_count: 50
+  setting: demo_clean

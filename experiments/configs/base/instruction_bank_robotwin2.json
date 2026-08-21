@@ -1,0 +1,123 @@
+{
+  "adjust_bottle": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the bottle and adjust it to the target pose.",
+      "Adjust the bottle to the target pose.",
+      "Hold the bottle body and adjust its pose.",
+      "Grasp the bottle side and rotate it.",
+      "Move the bottle into the target pose.",
+      "Turn the bottle to the target orientation."
+    ]
+  },
+  "beat_block_hammer": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the hammer, grab it, and beat the block.",
+      "Grab the hammer and beat the block.",
+      "Grab the hammer handle and hit the block.",
+      "Pick up the hammer and strike the block.",
+      "Hold the hammer handle and beat the block.",
+      "Use the hammer to hit the target block."
+    ]
+  },
+  "click_bell": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the bell and press it.",
+      "Move to the bell and press it.",
+      "Press the top of the bell.",
+      "Move to the bell button and push it.",
+      "Press the bell with a downward motion.",
+      "Press the bell button to ring it."
+    ]
+  },
+  "hanging_mug": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the mug, pick it up, and hang it on the rack.",
+      "Pick up the mug and hang it on the rack.",
+      "Grab the mug handle and hang it.",
+      "Lift the mug and place it on the rack.",
+      "Carry the mug to the rack hook.",
+      "Hold the mug handle while hanging it."
+    ]
+  },
+  "lift_pot": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the pot, grab both sides, and lift it.",
+      "Grab the pot with both arms.",
+      "Hold both sides of the pot.",
+      "Grasp the pot with both arms.",
+      "Lift the pot by its side handles.",
+      "Use both arms to raise the pot."
+    ]
+  },
+  "move_playingcard_away": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the playing card, grab it, and move it outward.",
+      "Use the arm to grab the playing card and move it outward.",
+      "Grab the playing card and move it outward.",
+      "Hold the card edge and move it away.",
+      "Pick up the card and carry it outward.",
+      "Move the playing card away from its start."
+    ]
+  },
+  "open_microwave": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the microwave handle and open the door.",
+      "Grasp the microwave handle and open the door.",
+      "Pull the microwave handle to open it.",
+      "Grasp the handle and swing the door open.",
+      "Open the microwave door by its handle.",
+      "Hold the handle and pull the door outward."
+    ]
+  },
+  "place_burger_fries": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the burger and fries and place them at their targets.",
+      "Place the burger and fries at the target locations.",
+      "Move the burger and fries to their targets.",
+      "Pick up both food items and place them.",
+      "Place each food item at its target spot.",
+      "Carry the burger and fries to the goal areas."
+    ]
+  },
+  "place_shoe": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the shoe, pick it up, and place it at the target.",
+      "Pick up the shoe and place it at the target location.",
+      "Pick up the shoe and place it.",
+      "Hold the shoe and move it to the target.",
+      "Grasp the shoe opening and carry it.",
+      "Place the shoe at the goal location."
+    ]
+  },
+  "press_stapler": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the stapler and press it down.",
+      "Press the stapler down.",
+      "Push down on the stapler.",
+      "Press the top of the stapler.",
+      "Apply downward force to the stapler.",
+      "Contact the stapler top and press it."
+    ]
+  },
+  "turn_switch": {
+    "sampling": "uniform",
+    "prompts": [
+      "Point to the switch and turn it to the target state.",
+      "Turn the switch to the target state.",
+      "Turn the switch lever to the target state.",
+      "Flip the switch to the desired position.",
+      "Rotate the switch lever.",
+      "Move the switch into the target state."
+    ]
+  }
+}

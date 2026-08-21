@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import importlib.metadata
 import importlib.util
+import os
 import pathlib
 import sys
 
@@ -23,6 +24,7 @@ CORE_MODULES = {
     "zarr": "zarr",
     "numcodecs": "numcodecs",
     "safetensors": "safetensors",
+    "pytorch3d": "pytorch3d",
     "pointnet2_ops": "pointnet2-ops",
     "pc_sam": "pointsam-r3d",
     "r3d": "r3d-policy-core",
@@ -69,6 +71,12 @@ def main():
     print("\nCore dependencies")
     missing = check_modules(CORE_MODULES)
 
+    clip_dir = pathlib.Path(__file__).resolve().parents[1] / "pretrained" / "clip-vit-base-patch32"
+    clip_ready = (clip_dir / "config.json").is_file()
+    print(f"{'OK' if clip_ready else 'MISSING':7s} {'policy CLIP snapshot':20s} {clip_dir}")
+    if not clip_ready:
+        missing.append("policy CLIP snapshot (run download_pretrained.py)")
+
     if args.benchmark:
         names = BENCHMARK_MODULES if args.benchmark == "all" else {
             args.benchmark: BENCHMARK_MODULES[args.benchmark]
@@ -78,6 +86,20 @@ def main():
             missing.extend(
                 check_modules({module: module for module in module_names})
             )
+            if benchmark == "robotwin2":
+                root = pathlib.Path(os.environ.get(
+                    "ROBOTWIN2_ROOT",
+                    pathlib.Path(__file__).resolve().parents[1] / "third_party" / "robotwin2",
+                ))
+                runtime_ready = all((root / item).exists() for item in (
+                    "envs", "assets", "description", "task_config"
+                ))
+                print(
+                    f"{'OK' if runtime_ready else 'MISSING':7s} "
+                    f"{'RoboTwin2 runtime':20s} {root}"
+                )
+                if not runtime_ready:
+                    missing.append("RoboTwin2 runtime/assets")
 
     if missing:
         print("\nMissing: " + ", ".join(sorted(set(missing))))

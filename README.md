@@ -17,29 +17,33 @@ Planned top-level components:
 
 ## Current Status
 
-The first migration slice is in place:
+The reproducibility slice now includes:
 
 - public `train.py` and `eval.py` entry points;
 - the R3D policy core used by the current V5 model;
 - the PointSAM two-way cross-attention encoder package;
 - package metadata for editable installs;
-- a path-clean Adroit Door reference configuration;
+- path-clean reference training configurations for Adroit, MetaWorld,
+  ManiSkill2 Camera-EE, and RoboTwin2;
 - observation-centric frame profiles for Adroit, MetaWorld, and ManiSkill2;
-- a first unified environment specification and dependency checker.
+- source-built CUDA FPS/PointNet2 operators and a fixed installation order;
+- Adroit, MetaWorld, RoboTwin2, and ManiSkill2 Camera-EE data tooling;
+- a pinned external RoboTwin2 runtime integration and benchmark installer.
 
-The workspace is not a complete public release yet. RoboTwin assets/runtime,
-benchmark data generation, the cleaned PointSAM training entry point, curated
-MetaWorld/RoboTwin configs, checkpoint download tooling, and final dependency
-installation are still being migrated.
+Large benchmark assets remain external by design. Adroit data collection also
+requires a third-party VRL3 expert checkpoint, and the ManiSkill2 Camera-EE
+builder starts from an existing native R3D Zarr. See
+`R3D/data_generation/README.md` for the exact boundary.
 
 ## Development Install
 
 From this directory:
 
 ```bash
-pip install -e ./PointSAM --no-deps
-pip install -e ./R3D --no-deps
-python environment/verify_environment.py
+conda env create -f environment/environment.yml
+conda activate r3d-release
+bash environment/install.sh
+bash environment/install_benchmarks.sh all
 ```
 
 Benchmark runtimes are optional and checked explicitly, for example:
@@ -60,7 +64,11 @@ python download_pretrained.py
 
 The script writes the checkpoint to
 `pretrained/twowayca-affordance/model.safetensors`, which is the relative path
-used by the public experiment configs. The ModelScope repository is public and
+used by the public experiment configs. It also downloads the official
+`openai/clip-vit-base-patch32` snapshot to
+`pretrained/clip-vit-base-patch32`. The encoder checkpoint already contains its
+own EVA02-E-14-plus OpenCLIP text tower; the separate CLIP-B/32 model supplies
+the policy/ATA text features. The ModelScope repository is public and
 does not require authentication. `MODELSCOPE_API_TOKEN` remains supported for
 authenticated or mirrored deployments. The expected SHA256 is
 `76e1daaca15d617288186e48af314250212bb906ae5e4bcea18330323c7d8951`.

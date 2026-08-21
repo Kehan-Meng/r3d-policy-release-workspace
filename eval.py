@@ -948,8 +948,7 @@ def main():
     if args.dry_run:
         return
 
-    os.environ.setdefault("HF_HUB_OFFLINE", "1")
-    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+    # Respect user-provided HF offline settings; do not force them on first use.
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
     os.environ.setdefault("MUJOCO_GL", "egl")
     prepend_env_path(os.environ, "PATH", pathlib.Path(sys.executable).parent)

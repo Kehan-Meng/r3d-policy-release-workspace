@@ -1,0 +1,57 @@
+extends: ../adroit/door_v5_masked_cosine.yaml
+
+experiment:
+  name: maniskill2_pick_cube_camera_ee_v5
+  output_dir: outputs/maniskill2_pick_cube_camera_ee_v5
+  results_dir: experiments/results/maniskill2_pick_cube_camera_ee_v5
+
+hydra:
+  config_name: r3d_maniskill.yaml
+
+sequence:
+  horizon: 16
+  n_obs_steps: 2
+  n_action_steps: 8
+
+task:
+  config: maniskill_oc_PickCube
+  name: PickCube-v0
+  num_points: 1024
+
+data:
+  train_zarr_path: R3D/data/maniskill2/PickCube-v0_camera_ee_v1.zarr
+  text_json_path: experiments/configs/base/instructions_maniskill2.json
+
+training:
+  disable_env_runner: true
+  num_epochs: 3001
+  batch_size: 128
+  gradient_accumulate_every: 2
+
+data_augmentation:
+  use_augmentation: true
+  pc_xyz_noise_std: 0.002
+  pc_rgb_noise_std: 0.0
+  agent_pos_noise_std: 0.0002
+  use_color_jitter: true
+  brightness_range: [-0.125, 0.125]
+  contrast_range: [0.5, 1.5]
+  saturation_range: [0.5, 1.5]
+
+policy:
+  pointcloud_encoder:
+    fps_randomization: true
+    random_point_dropout: true
+    random_point_dropout_max_ratio: 0.8
+
+instruction_aug:
+  enabled: false
+
+eval:
+  task_names: [PickCube-v0]
+  eval_episodes: 100
+
+report:
+  benchmark: maniskill2
+  policy_contract: camera_ee_target_delta_v1
+  controller: pd_ee_target_delta_pose

@@ -1,0 +1,23 @@
+extends: ../adroit/door_v5_masked_cosine.yaml
+
+experiment:
+  name: metaworld_lever_pull_v5
+  output_dir: outputs/metaworld_lever_pull_v5
+  results_dir: experiments/results/metaworld_lever_pull_v5
+
+task:
+  config: metaworld_lever-pull
+  name: lever-pull
+  num_points: 1024
+
+data:
+  train_zarr_path: R3D/data/metaworld_lever-pull_expert.zarr
+  text_json_path: experiments/configs/base/instruction_bank_adroit_metaworld.json
+
+eval:
+  task_names: [lever-pull]
+  eval_episodes: 100
+
+report:
+  benchmark: metaworld
+  task: lever-pull

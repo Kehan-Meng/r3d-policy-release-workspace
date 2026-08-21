@@ -346,8 +346,8 @@ def main():
     performance = cfg.get("performance", {})
     if performance.get("timm_fused_attention") is not None:
         env["TIMM_FUSED_ATTN"] = "1" if performance.get("timm_fused_attention") else "0"
-    env.setdefault("HF_HUB_OFFLINE", "1")
-    env.setdefault("TRANSFORMERS_OFFLINE", "1")
+    # Public configs point at a repository-local CLIP snapshot. Custom configs
+    # may use a Hugging Face model id, so do not force offline mode here.
     env.setdefault("TOKENIZERS_PARALLELISM", "false")
     env.setdefault("MUJOCO_GL", "egl")
     if cfg.training.logging_mode in ("online", "offline", "disabled"):

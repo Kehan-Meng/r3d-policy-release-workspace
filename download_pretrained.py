@@ -1,4 +1,4 @@
-"""Download and verify the released visual encoder checkpoint."""
+"""Download released encoder weights and the official CLIP text model."""
 
 import hashlib
 import os
@@ -13,6 +13,8 @@ EXPECTED_SHA256 = (
 )
 REPO_ROOT = pathlib.Path(__file__).resolve().parent
 TARGET = REPO_ROOT / "pretrained" / "twowayca-affordance" / MODEL_FILE
+CLIP_MODEL_ID = "openai/clip-vit-base-patch32"
+CLIP_TARGET = REPO_ROOT / "pretrained" / "clip-vit-base-patch32"
 
 
 def sha256(path):
@@ -35,31 +37,57 @@ def main():
     if TARGET.is_file():
         verify(TARGET)
         print(f"[weights] ready: {TARGET}")
+    else:
+        try:
+            from modelscope import model_file_download
+        except ImportError as exc:
+            raise RuntimeError(
+                "ModelScope is required to download the encoder checkpoint. "
+                "Install it with `pip install modelscope==1.39.1`."
+            ) from exc
+
+        TARGET.parent.mkdir(parents=True, exist_ok=True)
+        downloaded = pathlib.Path(
+            model_file_download(
+                MODEL_ID,
+                MODEL_FILE,
+                local_dir=str(TARGET.parent),
+                token=os.environ.get("MODELSCOPE_API_TOKEN"),
+            )
+        )
+        if downloaded.resolve() != TARGET.resolve():
+            raise RuntimeError(
+                f"ModelScope downloaded to unexpected path {downloaded}; expected {TARGET}"
+            )
+        verify(TARGET)
+        print(f"[weights] downloaded and verified: {TARGET}")
+
+    if (CLIP_TARGET / "config.json").is_file():
+        print(f"[weights] ready: {CLIP_TARGET}")
         return
 
     try:
-        from modelscope import model_file_download
+        from huggingface_hub import snapshot_download
     except ImportError as exc:
         raise RuntimeError(
-            "ModelScope is required to download the checkpoint. Install it with "
-            "`pip install modelscope==1.39.1`, authenticate, and rerun this script."
+            "huggingface_hub is required to download the policy CLIP model."
         ) from exc
-
-    TARGET.parent.mkdir(parents=True, exist_ok=True)
-    downloaded = pathlib.Path(
-        model_file_download(
-            MODEL_ID,
-            MODEL_FILE,
-            local_dir=str(TARGET.parent),
-            token=os.environ.get("MODELSCOPE_API_TOKEN"),
-        )
+    CLIP_TARGET.mkdir(parents=True, exist_ok=True)
+    snapshot_download(
+        repo_id=CLIP_MODEL_ID,
+        local_dir=str(CLIP_TARGET),
+        allow_patterns=[
+            "config.json",
+            "tokenizer.json",
+            "tokenizer_config.json",
+            "special_tokens_map.json",
+            "vocab.json",
+            "merges.txt",
+            "pytorch_model.bin",
+            "model.safetensors",
+        ],
     )
-    if downloaded.resolve() != TARGET.resolve():
-        raise RuntimeError(
-            f"ModelScope downloaded to unexpected path {downloaded}; expected {TARGET}"
-        )
-    verify(TARGET)
-    print(f"[weights] downloaded and verified: {TARGET}")
+    print(f"[weights] downloaded official CLIP model: {CLIP_TARGET}")
 
 
 if __name__ == "__main__":
@@ -68,4 +96,3 @@ if __name__ == "__main__":
     except Exception as exc:
         print(f"[weights] error: {exc}", file=sys.stderr)
         raise
-

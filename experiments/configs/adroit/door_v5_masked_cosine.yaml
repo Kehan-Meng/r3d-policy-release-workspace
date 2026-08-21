@@ -19,7 +19,7 @@ data:
 policy:
   use_text: true
   use_text_for_global_cond: false
-  clip_model_name: openai/clip-vit-base-patch32
+  clip_model_name: pretrained/clip-vit-base-patch32
   freeze_clip: true
   text_feat_dim: 64
   use_act: true
