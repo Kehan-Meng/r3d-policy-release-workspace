@@ -48,8 +48,23 @@ Benchmark runtimes are optional and checked explicitly, for example:
 python environment/verify_environment.py --benchmark maniskill2
 ```
 
-Large checkpoints are never committed. Place downloaded weights under
-`pretrained/` or set the checkpoint paths in an experiment config.
+Large checkpoints are never committed. The released two-way cross-attention
+encoder is hosted at
+[`Lewandovski/twowayca-affordance`](https://modelscope.cn/models/Lewandovski/twowayca-affordance)
+on ModelScope. Download and verify it with:
+
+```bash
+pip install modelscope==1.39.1
+python download_pretrained.py
+```
+
+The script writes the checkpoint to
+`pretrained/twowayca-affordance/model.safetensors`, which is the relative path
+used by the public experiment configs. The ModelScope repository is currently
+private, so the downloading account must be granted access and authenticated;
+`MODELSCOPE_API_TOKEN` can also be supplied through the environment. The
+expected SHA256 is
+`76e1daaca15d617288186e48af314250212bb906ae5e4bcea18330323c7d8951`.
 
 ## Entry Points
 

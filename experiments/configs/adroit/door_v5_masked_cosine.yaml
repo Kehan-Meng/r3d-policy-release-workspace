@@ -59,7 +59,7 @@ policy:
     heatmap_config_dir: PointSAM/configs
     heatmap_as_prob: true
     load_checkpoint: true
-    checkpoint_path: pretrained/pointsam_twowayca_affogato_v1.safetensors
+    checkpoint_path: pretrained/twowayca-affordance/model.safetensors
     strict_load: false
     ignore_mismatched_sizes: true
     freeze: false

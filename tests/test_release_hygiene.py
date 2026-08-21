@@ -9,6 +9,7 @@ EXCLUDED_DIRS = {
     "__pycache__",
     "checkpoints",
     "outputs",
+    "pretrained",
     "results",
     "runs",
 }
