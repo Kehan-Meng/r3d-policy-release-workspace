@@ -229,7 +229,6 @@ class Attention(nn.Module):
         k: Tensor,
         v: Tensor,
         attn_mask: Tensor = None,
-        return_attention: bool = False,
     ) -> Tensor:
         # Input projections
         q = self.q_proj(q)
@@ -266,8 +265,6 @@ class Attention(nn.Module):
         out = self._recombine_heads(out)
         out = self.out_proj(out)
 
-        if return_attention:
-            return out, attn
         return out
 
 

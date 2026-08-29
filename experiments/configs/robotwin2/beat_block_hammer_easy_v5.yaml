@@ -1,4 +1,4 @@
-extends: ../adroit/door_v5_masked_cosine.yaml
+extends: ../adroit/door_v5.yaml
 
 experiment:
   name: robotwin2_beat_block_hammer_easy_v5
@@ -33,12 +33,6 @@ eval:
   task_settings:
     beat_block_hammer: demo_clean
   eval_episodes: 100
-
-instruction_aug:
-  enabled: true
-  bank_path: experiments/configs/base/instruction_bank_robotwin2.json
-  apply_in_train: true
-  apply_in_val: false
 
 report:
   benchmark: robotwin2

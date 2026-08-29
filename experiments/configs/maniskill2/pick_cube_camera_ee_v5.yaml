@@ -1,4 +1,4 @@
-extends: ../adroit/door_v5_masked_cosine.yaml
+extends: ../adroit/door_v5.yaml
 
 experiment:
   name: maniskill2_pick_cube_camera_ee_v5
@@ -43,9 +43,6 @@ policy:
     fps_randomization: true
     random_point_dropout: true
     random_point_dropout_max_ratio: 0.8
-
-instruction_aug:
-  enabled: false
 
 eval:
   task_names: [PickCube-v0]

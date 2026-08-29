@@ -19,6 +19,15 @@ bash environment/install.sh
 python download_pretrained.py
 ```
 
+The installer registers both local packages as editable installs. Confirm that
+imports work independently of the current working directory and resolve to this
+checkout:
+
+```bash
+(cd /tmp && python -c "import r3d, pc_sam; print(r3d.__file__); print(pc_sam.__file__)")
+python environment/verify_environment.py
+```
+
 The order matters. `pytorch3d_simplified` and `pointnet2_ops` cannot be safely
 represented as ordinary cross-platform wheels: their binaries depend on the
 Torch, CUDA, compiler, and GPU architecture available on the target machine.

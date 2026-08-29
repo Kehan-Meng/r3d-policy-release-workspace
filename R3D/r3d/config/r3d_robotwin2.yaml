@@ -67,16 +67,7 @@ policy:
     ffn_ratio: 4.0
     use_pc_pe_in_input: true
     pe_scale_init: 1.0
-    use_pseudo_heatmap: false
-    pseudo_text_pool: cls
-    pseudo_heatmap_normalize: minmax
     drop_cls_token: false
-
-  mq_diversity:
-    eps: 1.0e-6
-    raw:
-      enabled: false
-      weight: 0.0
 
   noise_scheduler:
     _target_: diffusers.schedulers.scheduling_ddim.DDIMScheduler
@@ -103,10 +94,6 @@ policy:
     direct_velocity_weight: 0.0
     num_inference_steps: 1
     # time_scale is omitted by default and becomes num_train_timesteps - 1.
-    # S6-audit: per-joint FK Jacobian weighting (S6-4)
-    use_joint_fk_weighting: false
-    # S6-audit: dual-arm differential geometry loss weight (S6-5)
-    dual_arm_diff_weight: 0.0
 
   num_inference_steps: 10
   obs_as_global_cond: true
@@ -123,16 +110,6 @@ policy:
   text_feat_dim: 64
   freeze_clip: true
   strict_text_lookup: false
-
-  # ACTTextAlignHead — training-only auxiliary supervision.
-  use_act_text_align: false
-  act_text_align_config:
-    lambda_max: 0.0
-    warmup_steps: 1000
-    mask_ratio: 0.3
-    num_heads: 8
-    mlp_ratio: 4.0
-
 
   pointcloud_encoder_cfg:
     pc_model: "eva02_tiny_patch14_224"

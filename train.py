@@ -41,14 +41,11 @@ def _build_nested_overrides(prefix, d):
     """Recursively build hydra CLI overrides for nested dicts.
 
     Example:
-        _build_nested_overrides("policy.act_text_align_config", {
-            "lambda_max": 1e-5,
-            "diagnostic": {"enabled": True, "every_n_steps": 200},
+        _build_nested_overrides("policy.flow_matching", {
+            "alpha": 1e-5,
         })
         # => [
-        #   "policy.act_text_align_config.lambda_max=1e-05",
-        #   "policy.act_text_align_config.diagnostic.enabled=true",
-        #   "policy.act_text_align_config.diagnostic.every_n_steps=200",
+        #   "policy.flow_matching.alpha=1e-05",
         # ]
     """
     overrides = []
@@ -67,21 +64,6 @@ def build_train_command(cfg):
     task = cfg.task
     data = cfg.data
     policy = cfg.policy
-    removed_options = []
-    for key in ("mq_spatial_scope", "mq_common_gradient_deflation"):
-        if policy.act.get(key) is not None:
-            removed_options.append(f"policy.act.{key}")
-    if policy.get("dense_residual_reader") is not None:
-        removed_options.append("policy.dense_residual_reader")
-    mq_diversity = policy.get("mq_diversity")
-    if mq_diversity is not None and mq_diversity.get("flow") is not None:
-        removed_options.append("policy.mq_diversity.flow")
-    if removed_options:
-        raise ValueError(
-            "Removed MQ experiment options are not supported: "
-            + ", ".join(removed_options)
-            + ". Keep competitive MQ and policy.mq_diversity.raw only."
-        )
     performance = cfg.get("performance", {})
     is_multitask = (
         "multitask" in str(cfg.hydra.get("config_name", ""))
@@ -126,7 +108,6 @@ def build_train_command(cfg):
         f"policy.act_config.num_queries={policy.act.num_queries}",
         f"policy.act_config.num_heads={policy.act.num_heads}",
         f"policy.act_config.heatmap_mode={policy.act.heatmap_mode}",
-        f"policy.act_config.use_pseudo_heatmap={bool_str(policy.act.use_pseudo_heatmap)}",
         f"policy.act_config.drop_cls_token={bool_str(policy.act.get('drop_cls_token', True))}",
         f"exp_name={exp.name}",
     ]
@@ -213,43 +194,10 @@ def build_train_command(cfg):
     if policy.get("text_feat_dim") is not None:
         overrides.append(f"policy.text_feat_dim={policy.text_feat_dim}")
 
-    if policy.act.get("pseudo_heatmap_source") is not None:
-        overrides.append(f"++policy.act_config.pseudo_heatmap_source={policy.act.pseudo_heatmap_source}")
     if policy.act.get("heatmap_gamma") is not None:
         overrides.append(
             f"++policy.act_config.heatmap_gamma={hydra_value(policy.act.heatmap_gamma)}"
         )
-    for key in (
-        "competitive_cross1",
-        "competitive_cross2",
-        "competitive_temperature",
-    ):
-        if policy.act.get(key) is not None:
-            overrides.append(
-                f"++policy.act_config.{key}={hydra_value(policy.act.get(key))}"
-            )
-    for key in (
-        "heatmap_intervention",
-        "heatmap_intervention_seed",
-        "heatmap_intervention_roll",
-    ):
-        if policy.act.get(key) is not None:
-            overrides.append(
-                f"++policy.act_config.{key}={hydra_value(policy.act.get(key))}"
-            )
-
-    if policy.get("use_act_text_align") is not None:
-        overrides.append(f"policy.use_act_text_align={bool_str(policy.use_act_text_align)}")
-    if policy.get("act_text_align_config") is not None:
-        overrides.extend(_build_nested_overrides(
-            "++policy.act_text_align_config", policy.act_text_align_config
-        ))
-
-    if policy.get("mq_diversity") is not None:
-        overrides.extend(_build_nested_overrides(
-            "++policy.mq_diversity", policy.mq_diversity
-        ))
-
     if policy.get("pointsam_checkpoint") is not None:
         overrides.append(
             "policy.pointcloud_encoder_cfg.pretrained_weights_path="
@@ -286,17 +234,6 @@ def build_train_command(cfg):
                 f"++task.dataset.task_name={task.name}",
                 f"++task.dataset.text_command={task.name}",
             ])
-
-    # --- instruction prompt augmentation ---
-    inst_aug = cfg.get("instruction_aug")
-    if inst_aug and inst_aug.get("enabled"):
-        overrides.extend([
-            f"++task.dataset.instruction_aug.enabled={bool_str(inst_aug['enabled'])}",
-            "++task.dataset.instruction_aug.bank_path="
-            f"{resolve_repo_path(inst_aug['bank_path'])}",
-            f"++task.dataset.instruction_aug.apply_in_train={bool_str(inst_aug.get('apply_in_train', True))}",
-            f"++task.dataset.instruction_aug.apply_in_val={bool_str(inst_aug.get('apply_in_val', False))}",
-        ])
 
     if "checkpoint" in cfg:
         ckpt = cfg.checkpoint

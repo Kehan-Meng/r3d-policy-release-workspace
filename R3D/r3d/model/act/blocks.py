@@ -69,8 +69,6 @@ class HeatmapCrossAttentionBlock(nn.Module):
         heatmap_gamma=1.0,
         log_bias_lambda=1.0,
         eps=1e-6,
-        competitive=False,
-        competitive_temperature=1.0,
     ):
         super().__init__()
         context_dim = dim if context_dim is None else context_dim
@@ -80,8 +78,6 @@ class HeatmapCrossAttentionBlock(nn.Module):
         self.heatmap_mode = heatmap_mode
         self.heatmap_gamma = heatmap_gamma
         self.log_bias_lambda = log_bias_lambda
-        self.competitive = competitive
-        self.competitive_temperature = float(competitive_temperature)
         self.norm_query = nn.LayerNorm(dim)
         self.norm_context = nn.LayerNorm(context_dim)
         self.cross_attn = HeatmapGuidedCrossAttention(
@@ -93,8 +89,6 @@ class HeatmapCrossAttentionBlock(nn.Module):
             heatmap_gamma=heatmap_gamma,
             log_bias_lambda=log_bias_lambda,
             eps=eps,
-            competitive=competitive,
-            competitive_temperature=competitive_temperature,
         )
         self.attn_drop = nn.Dropout(dropout)
         self.norm2 = nn.LayerNorm(dim)

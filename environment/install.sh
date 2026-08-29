@@ -19,8 +19,8 @@ MAX_JOBS="${MAX_JOBS:-8}" python -m pip install --no-build-isolation -v \
 MAX_JOBS="${MAX_JOBS:-8}" python -m pip install --no-build-isolation -v \
   "$ROOT/third_party/pointnet2_ops"
 
-python -m pip install -e "$ROOT/PointSAM" --no-deps
-python -m pip install -e "$ROOT/R3D" --no-deps
+python -m pip install -e "$ROOT/PointSAM" --no-deps --no-build-isolation
+python -m pip install -e "$ROOT/R3D" --no-deps --no-build-isolation
 
 python "$ROOT/environment/verify_environment.py"
 echo "Core environment installed. Add benchmark runtimes with environment/install_benchmarks.sh."

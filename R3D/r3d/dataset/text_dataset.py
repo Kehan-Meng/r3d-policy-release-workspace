@@ -51,8 +51,7 @@ class TextInstructionDataset:
                 and value["prompts"]
                 and isinstance(value["prompts"][0], str)
             ):
-                # Instruction-bank format: prompts[0] is the canonical policy
-                # input and prompts[1:] are auxiliary reconstruction targets.
+                # Instruction-bank format: prompts[0] is the canonical policy input.
                 instructions[str(key)] = value["prompts"][0]
             else:
                 raise ValueError(
@@ -170,23 +169,4 @@ def attach_text_fields(
     data["task_name"] = command
     data["text"] = text
 
-    # Auxiliary text is training-only and is consumed only by ACTTextAlignHead.
-    # It deliberately excludes prompts[0] so the main policy input remains
-    # unchanged while the reconstruction branch sees paraphrases.
-    if is_train and bank_enabled and apply_in_train:
-        align_text = instruction_bank.sample_aux(
-            command,
-            fallback_text=None,
-            exclude_original=True,
-        )
-        if align_text is not None:
-            data["align_text"] = align_text
-    elif (not is_train) and bank_enabled and apply_in_val:
-        align_text = instruction_bank.sample_aux(
-            command,
-            fallback_text=None,
-            exclude_original=True,
-        )
-        if align_text is not None:
-            data["align_text"] = align_text
     return data

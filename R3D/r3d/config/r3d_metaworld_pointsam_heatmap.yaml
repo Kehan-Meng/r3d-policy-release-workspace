@@ -56,9 +56,6 @@ policy:
     ffn_ratio: 4.0
     use_pc_pe_in_input: true
     pe_scale_init: 1.0
-    use_pseudo_heatmap: false
-    pseudo_text_pool: cls
-    pseudo_heatmap_normalize: minmax
     drop_cls_token: false
 
   noise_scheduler:
@@ -103,15 +100,6 @@ policy:
   text_feat_dim: 64
   freeze_clip: true
   strict_text_lookup: false
-
-  # ACTTextAlignHead — training-only auxiliary supervision.
-  use_act_text_align: false
-  act_text_align_config:
-    lambda_max: 0.0
-    warmup_steps: 1000
-    mask_ratio: 0.3
-    num_heads: 8
-    mlp_ratio: 4.0
 
   pointcloud_encoder_cfg:
     pointsam_root: null

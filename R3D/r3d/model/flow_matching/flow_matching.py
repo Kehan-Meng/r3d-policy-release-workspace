@@ -44,11 +44,6 @@ def compute_consistency_flow_matching_loss(
         stop_gradient_target=True,
         direct_velocity_weight=0.0,
         time_scale=99.0,
-        compute_gradient_diagnostics=False,
-        consistency_routing_multipliers=None,
-        consistency_routing_t_bins=None,
-        consistency_routing_stratified_t=False,
-        dim_weights=None,
         ):
     _validate_flow_condition(condition_mask, global_cond, pc_pe)
 
@@ -56,36 +51,11 @@ def compute_consistency_flow_matching_loss(
     a1 = trajectory
     a0 = torch.randn_like(a1)
 
-    routing_bin_indices = None
-    if consistency_routing_stratified_t:
-        if consistency_routing_t_bins is None:
-            raise ValueError("Stratified t sampling requires routing t_bins")
-        t_bins = torch.as_tensor(
-            consistency_routing_t_bins, device=a1.device, dtype=a1.dtype
-        )
-        if t_bins.ndim != 1 or t_bins.numel() < 2:
-            raise ValueError("routing t_bins must be a one-dimensional boundary list")
-        if not torch.all(t_bins[1:] > t_bins[:-1]):
-            raise ValueError("routing t_bins must be strictly increasing")
-        num_bins = t_bins.numel() - 1
-        # Balanced bin assignment, shuffled so a dataset sample is not tied to one bin.
-        routing_bin_indices = torch.arange(
-            batch_size, device=a1.device, dtype=torch.long
-        ).remainder(num_bins)
-        routing_bin_indices = routing_bin_indices[torch.randperm(batch_size, device=a1.device)]
-        low = t_bins[routing_bin_indices].clamp_min(float(eps))
-        high = t_bins[routing_bin_indices + 1].clamp_max(1.0)
-        if torch.any(high <= low):
-            raise ValueError("routing t_bins contain an empty interval after eps clipping")
-        t = low + (high - low) * torch.rand(
-            batch_size, device=a1.device, dtype=a1.dtype
-        )
-    else:
-        t = torch.rand(
-            batch_size,
-            device=a1.device,
-            dtype=a1.dtype,
-        ) * (1.0 - eps) + eps
+    t = torch.rand(
+        batch_size,
+        device=a1.device,
+        dtype=a1.dtype,
+    ) * (1.0 - eps) + eps
     r = torch.clamp(t + delta, max=1.0)
 
     t_expand = t.view(batch_size, 1, 1).expand_as(a1)
@@ -143,12 +113,6 @@ def compute_consistency_flow_matching_loss(
 
     losses_f = torch.square(ft - fr).reshape(batch_size, -1).mean(dim=-1)
 
-    if dim_weights is not None:
-        w = torch.as_tensor(dim_weights, device=losses_f.device, dtype=losses_f.dtype)
-        w = w.view(1, 1, -1).expand(batch_size, trajectory.shape[1], -1)
-        losses_f_w = torch.square(ft - fr) * w
-        losses_f = losses_f_w.reshape(batch_size, -1).mean(dim=-1)
-
     if boundary == 0:
         losses_v = torch.zeros_like(losses_f)
     else:
@@ -168,57 +132,7 @@ def compute_consistency_flow_matching_loss(
     losses_direct = torch.square(vt - direct_velocity_target)
     losses_direct = losses_direct.reshape(batch_size, -1).mean(dim=-1)
 
-    gradient_diagnostics = {}
-    if compute_gradient_diagnostics:
-        grad_f = torch.autograd.grad(
-            outputs=losses_f.mean(),
-            inputs=vt,
-            retain_graph=True,
-            create_graph=False,
-            allow_unused=False,
-        )[0]
-        grad_direct = torch.autograd.grad(
-            outputs=losses_direct.mean(),
-            inputs=vt,
-            retain_graph=True,
-            create_graph=False,
-            allow_unused=False,
-        )[0]
-        grad_f = grad_f.detach().float().reshape(-1)
-        grad_direct = grad_direct.detach().float().reshape(-1)
-        grad_f_norm = torch.linalg.vector_norm(grad_f)
-        grad_direct_norm = torch.linalg.vector_norm(grad_direct)
-        denominator = (grad_f_norm * grad_direct_norm).clamp_min(1e-12)
-        gradient_diagnostics = {
-            "flow_grad_f_norm": grad_f_norm.item(),
-            "flow_grad_direct_norm": grad_direct_norm.item(),
-            "flow_grad_ratio_unweighted": (
-                grad_f_norm / grad_direct_norm.clamp_min(1e-12)
-            ).item(),
-            "flow_grad_cosine": (
-                torch.dot(grad_f, grad_direct) / denominator
-            ).clamp(-1.0, 1.0).item(),
-        }
-
-    routing_sample_multipliers = torch.ones_like(losses_f)
-    if consistency_routing_multipliers is not None:
-        if routing_bin_indices is None:
-            raise ValueError("routing multipliers require stratified t sampling")
-        route_values = torch.as_tensor(
-            consistency_routing_multipliers,
-            device=losses_f.device,
-            dtype=losses_f.dtype,
-        )
-        if route_values.numel() != int(t_bins.numel() - 1):
-            raise ValueError(
-                "routing multiplier count must equal len(t_bins)-1, got "
-                f"{route_values.numel()} and {t_bins.numel() - 1}"
-            )
-        routing_sample_multipliers = route_values[routing_bin_indices]
-
-    weighted_losses_f = (
-        consistency_weight * routing_sample_multipliers * losses_f
-    )
+    weighted_losses_f = consistency_weight * losses_f
     weighted_losses_v = alpha * losses_v
     weighted_losses_direct = direct_velocity_weight * losses_direct
     loss = torch.mean(
@@ -238,23 +152,6 @@ def compute_consistency_flow_matching_loss(
         "flow_stop_gradient_target": float(stop_gradient_target),
         "flow_direct_velocity_weight": float(direct_velocity_weight),
     }
-    if routing_bin_indices is not None:
-        loss_dict["flow_routing_multiplier_mean"] = (
-            routing_sample_multipliers.detach().float().mean().item()
-        )
-        for bin_index in range(int(t_bins.numel() - 1)):
-            selected = routing_bin_indices == bin_index
-            if selected.any():
-                loss_dict[f"flow_routing_bin{bin_index}_f_loss"] = (
-                    losses_f[selected].detach().float().mean().item()
-                )
-                loss_dict[f"flow_routing_bin{bin_index}_sample_fraction"] = (
-                    selected.detach().float().mean().item()
-                )
-            loss_dict[f"flow_routing_bin{bin_index}_multiplier"] = float(
-                consistency_routing_multipliers[bin_index]
-            )
-    loss_dict.update(gradient_diagnostics)
     return loss, loss_dict
 
 

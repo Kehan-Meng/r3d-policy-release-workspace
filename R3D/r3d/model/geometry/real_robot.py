@@ -90,7 +90,7 @@ class RealRobotPreflightReport:
 
 
 class RealRobotRuntimeContextBuilder:
-    """Extract a validated dynamic-transform sidecar from an observation."""
+    """Extract validated dynamic frame transforms from an observation."""
 
     def __init__(
         self,

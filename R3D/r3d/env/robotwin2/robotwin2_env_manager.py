@@ -48,7 +48,6 @@ from datetime import datetime
 import importlib
 import json
 import torch
-import time
 
 from r3d.env.robotwin2.ee_execution import (
     EE_EXECUTION_CONTRACT_VERSION,
@@ -65,47 +64,27 @@ class RoboTwin2EnvManager:
     """
 
     def __init__(self):
-        self.profile_eval = False
         self.lean_observation = False
         self.defer_intermediate_render = False
-        self._eval_profile = {}
         self.last_controller_execution = None
         self.last_action_step_count = 0
 
     def configure_eval_observation(
-            self, profile=False, lean=False, defer_intermediate_render=False,
-            rt_samples_per_pixel=None, camera_shader=None):
-        self.profile_eval = bool(profile)
+            self, lean=False, defer_intermediate_render=False):
         self.lean_observation = bool(lean)
         self.defer_intermediate_render = bool(defer_intermediate_render)
-        self.rt_samples_per_pixel = rt_samples_per_pixel
-        self.camera_shader = camera_shader
-        self._eval_profile = {
-            "take_action_calls": 0,
-            "action_execution_calls": 0,
-            "observation_calls_from_action": 0,
-        }
         if self.lean_observation and hasattr(self, "args"):
             # Apply before setup_demo so unused cameras are never constructed.
             self.args["camera"]["collect_wrist_camera"] = False
             self.args["camera"]["eval_head_only"] = True
             self.args["data_type"]["rgb"] = False
-        if rt_samples_per_pixel is not None and hasattr(self, "args"):
-            if int(rt_samples_per_pixel) < 1:
-                raise ValueError("rt_samples_per_pixel must be positive")
-            self.args["rt_samples_per_pixel"] = int(rt_samples_per_pixel)
-        if camera_shader is not None and hasattr(self, "args"):
-            self.args["camera_shader"] = camera_shader
         if hasattr(self, "task"):
-            self.task.profile_observation = self.profile_eval
-            self.task.reset_obs_profile()
             self.apply_eval_observation_flags()
 
     def apply_eval_observation_flags(self):
         """Reapply flags after setup_demo recreates task cameras and data_type."""
         if not hasattr(self, "task"):
             return
-        self.task.profile_observation = self.profile_eval
         self.task.defer_intermediate_render = self.defer_intermediate_render
         if self.lean_observation:
             if hasattr(self.task, "data_type"):
@@ -113,29 +92,6 @@ class RoboTwin2EnvManager:
             if hasattr(self.task, "cameras"):
                 self.task.cameras.collect_wrist_camera = False
                 self.task.cameras.capture_head_only = True
-
-    def _profile_add(self, key, value):
-        if self.profile_eval:
-            self._eval_profile[key] = self._eval_profile.get(key, 0.0) + value
-
-    def get_eval_profile(self):
-        result = dict(self._eval_profile)
-        if hasattr(self, "task") and hasattr(self.task, "get_obs_profile"):
-            result["observation_stages"] = self.task.get_obs_profile()
-        result["lean_observation"] = self.lean_observation
-        result["defer_intermediate_render"] = self.defer_intermediate_render
-        result["rt_samples_per_pixel"] = getattr(self, "rt_samples_per_pixel", None) or 32
-        result["camera_shader"] = getattr(self, "camera_shader", None) or "rt"
-        if hasattr(self, "task") and hasattr(self.task, "cameras"):
-            cameras = self.task.cameras
-            result["captured_cameras"] = (
-                ["head_camera"] if getattr(cameras, "capture_head_only", False)
-                else (
-                    (["left_camera", "right_camera"] if cameras.collect_wrist_camera else [])
-                    + list(cameras.static_camera_name)
-                )
-            )
-        return result
 
     def get_last_controller_execution(self):
         return self.last_controller_execution
@@ -540,7 +496,6 @@ class RoboTwin2EnvManager:
             )
         first_actions = actions[:first_stage]
         second_actions = actions[first_stage:]
-        take_action_start = time.perf_counter()
         is_ee_action = action_types in ('ee', 'delta_ee')
         controller_stages = []
         attempted_action_count = 0
@@ -548,7 +503,6 @@ class RoboTwin2EnvManager:
 
         def execute_actions(action_batch):
             nonlocal attempted_action_count, controller_ok
-            stage_start = time.perf_counter()
             if is_ee_action:
                 stage_result = execute_ee_action_chunk(
                     self.task,
@@ -563,14 +517,9 @@ class RoboTwin2EnvManager:
             else:
                 self.task.take_action(action_batch, action_type=action_types)
                 attempted_action_count += len(action_batch)
-            self._profile_add("action_execution_sec", time.perf_counter() - stage_start)
-            self._profile_add("action_execution_calls", 1)
 
         def append_observation():
-            stage_start = time.perf_counter()
             observation = self.get_observation()
-            self._profile_add("observation_wall_sec", time.perf_counter() - stage_start)
-            self._profile_add("observation_calls_from_action", 1)
 
             if use_ee_space:
                 agent_pos_vector = np.concatenate([
@@ -649,8 +598,6 @@ class RoboTwin2EnvManager:
             self.ffmpeg.stdin.write(observation['observation']['head_camera']['rgb'].tobytes())
         self.last_action_step_count = int(attempted_action_count)
         self.step += attempted_action_count
-        self._profile_add("take_action_total_sec", time.perf_counter() - take_action_start)
-        self._profile_add("take_action_calls", 1)
         self.Detect_env_state()
 
         if self.env_state == 1:

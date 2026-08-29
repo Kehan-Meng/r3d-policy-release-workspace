@@ -206,14 +206,6 @@ class TrainDP3Workspace(CheckpointMixin, WorkspaceEvaluationMixin):
             val_dataset = dataset.get_validation_dataset()
             val_dataloader = DataLoader(val_dataset, **cfg.val_dataloader)
 
-        routing_loader = None
-        policy_for_routing = self.model.module if self.use_ddp else self.model
-        if getattr(policy_for_routing, "flow_routing_enabled", False):
-            raise NotImplementedError(
-                "Experimental online consistency routing is not part of the "
-                "public training pipeline. Disable flow_routing_enabled."
-            )
-
         normalizer = dataset.get_normalizer()
 
         loaded_frame_metadata = copy.deepcopy(
@@ -398,9 +390,6 @@ class TrainDP3Workspace(CheckpointMixin, WorkspaceEvaluationMixin):
                     self.optimizer.step()
                     self.optimizer.zero_grad()
                     lr_scheduler.step()
-                    # ACTTextAlign: increment training_step per optimizer step (not micro-batch)
-                    if hasattr(self.model, 'training_step') and self.model.training_step is not None:
-                        self.model.training_step.add_(1)
                 t1_3 = time.time()
                 # update ema
                 if cfg.training.use_ema:

@@ -68,7 +68,7 @@ used by the public experiment configs. It also downloads the official
 `openai/clip-vit-base-patch32` snapshot to
 `pretrained/clip-vit-base-patch32`. The encoder checkpoint already contains its
 own EVA02-E-14-plus OpenCLIP text tower; the separate CLIP-B/32 model supplies
-the policy/ATA text features. The ModelScope repository is public and
+the policy text features. The ModelScope repository is public and
 does not require authentication. `MODELSCOPE_API_TOKEN` remains supported for
 authenticated or mirrored deployments. The expected SHA256 is
 `76e1daaca15d617288186e48af314250212bb906ae5e4bcea18330323c7d8951`.
@@ -79,15 +79,15 @@ Inspect a generated training command without starting a process:
 
 ```bash
 python train.py \
-  --config experiments/configs/adroit/door_v5_masked_cosine.yaml
+  --config experiments/configs/adroit/door_v5.yaml
 ```
 
 Start training by adding `--execute`. Evaluation uses the same config:
 
 ```bash
 python eval.py \
-  --config experiments/configs/adroit/door_v5_masked_cosine.yaml \
-  --checkpoint outputs/adroit_door_v5_masked_cosine/checkpoints/EPOCH.ckpt \
+  --config experiments/configs/adroit/door_v5.yaml \
+  --checkpoint outputs/adroit_door_v5/checkpoints/EPOCH.ckpt \
   --eval-episodes 100 \
   --eval-seed 20260721
 ```
@@ -153,5 +153,5 @@ Use the OC Door example with:
 
 ```bash
 python train.py \
-  --config experiments/configs/adroit/door_v5_masked_cosine_oc.yaml
+  --config experiments/configs/adroit/door_v5_oc.yaml
 ```

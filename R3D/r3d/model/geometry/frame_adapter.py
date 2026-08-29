@@ -245,7 +245,8 @@ class CanonicalFrameAdapter:
     ) -> Any:
         if self.profile.require_metadata:
             raise FrameMetadataMismatchError(
-                "This profile requires sidecar metadata; use the corresponding *_with_metadata method"
+                "This profile requires runtime frame metadata; use the "
+                "corresponding *_with_metadata method"
             )
         return self._transform_sample(
             sample,

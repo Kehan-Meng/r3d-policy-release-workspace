@@ -18,8 +18,6 @@ class HeatmapGuidedCrossAttention(nn.Module):
         log_bias_lambda=1.0,
         eps=1e-6,
         bias=True,
-        competitive=False,
-        competitive_temperature=1.0,
     ):
         super().__init__()
         context_dim = query_dim if context_dim is None else context_dim
@@ -39,12 +37,6 @@ class HeatmapGuidedCrossAttention(nn.Module):
             raise ValueError(
                 f"heatmap_gamma must be positive, got {heatmap_gamma}"
             )
-        if competitive_temperature <= 0:
-            raise ValueError(
-                "competitive_temperature must be positive, got "
-                f"{competitive_temperature}"
-            )
-
         self.query_dim = query_dim
         self.context_dim = context_dim
         self.num_heads = num_heads
@@ -54,8 +46,6 @@ class HeatmapGuidedCrossAttention(nn.Module):
         self.heatmap_gamma = float(heatmap_gamma)
         self.log_bias_lambda = log_bias_lambda
         self.eps = eps
-        self.competitive = competitive
-        self.competitive_temperature = float(competitive_temperature)
 
         self.q_proj = nn.Linear(query_dim, query_dim, bias=bias)
         self.k_proj = nn.Linear(context_dim, query_dim, bias=bias)
@@ -181,25 +171,9 @@ class HeatmapGuidedCrossAttention(nn.Module):
                 formatted_heatmap.clamp_min(self.eps)
             )
 
-        if self.competitive:
-            # ── Competitive MQ Assignment ──
-            # softmax across MQ/query dimension (dim=2):
-            #   for every point n, Q meta-queries compete for ownership
-            C = torch.softmax(
-                scores / self.competitive_temperature, dim=2
-            )  # [B, H, Q, N], Σ_q C[b,h,q,n] = 1
-
-            if mode == "multiply" and formatted_heatmap is not None:
-                # multiply point-wise heatmap importance, then normalize over points
-                attn = self._multiply_attention_by_heatmap(C, formatted_heatmap)
-            else:
-                # normalize over point dimension for each MQ
-                attn = C / (C.sum(dim=-1, keepdim=True) + self.eps)
-        else:
-            # ── Baseline: each MQ independently selects points ──
-            attn = torch.softmax(scores, dim=-1)
-            if mode == "multiply" and formatted_heatmap is not None:
-                attn = self._multiply_attention_by_heatmap(attn, formatted_heatmap)
+        attn = torch.softmax(scores, dim=-1)
+        if mode == "multiply" and formatted_heatmap is not None:
+            attn = self._multiply_attention_by_heatmap(attn, formatted_heatmap)
 
         output = torch.matmul(self.attn_drop(attn), v)
         output = output.transpose(1, 2).contiguous().view(

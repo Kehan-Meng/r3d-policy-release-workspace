@@ -1,4 +1,4 @@
-extends: ../adroit/door_v5_masked_cosine.yaml
+extends: ../adroit/door_v5.yaml
 
 experiment:
   name: metaworld_lever_pull_v5

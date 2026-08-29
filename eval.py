@@ -121,28 +121,6 @@ def load_policy(cfg, checkpoint_path, device, policy_source="auto"):
     with open_dict(train_cfg):
         train_cfg.training.device = device
         train_cfg.training.use_ddp = False
-        # Evaluation-only ACT interventions live in the external experiment
-        # config, not in the checkpoint's saved training config. Propagate
-        # them before constructing the workspace so causal heatmap ablations
-        # actually reach AffordanceGuidedCompactorTransformer.
-        eval_act_cfg = nested_cfg_get(cfg, ("policy", "act"), None)
-        train_act_cfg = nested_cfg_get(train_cfg, ("policy", "act_config"), None)
-        if eval_act_cfg is not None and train_act_cfg is not None:
-            for key in (
-                "heatmap_intervention",
-                "heatmap_intervention_seed",
-                "heatmap_intervention_roll",
-            ):
-                value = cfg_get(eval_act_cfg, key, None)
-                if value is not None:
-                    train_act_cfg[key] = value
-
-    intervention = nested_cfg_get(
-        train_cfg,
-        ("policy", "act_config", "heatmap_intervention"),
-        "none",
-    )
-    print(f"[EVAL] ACT heatmap_intervention={intervention}", flush=True)
 
     workspace = TrainDP3Workspace(train_cfg, output_dir=str(pathlib.Path(cfg.experiment.output_dir)))
     workspace.load_payload(payload)
@@ -259,10 +237,7 @@ def build_runner(
         eval_seed=None,
         episode_start=0,
         robotwin_lean_observation=False,
-        robotwin_profile=False,
         robotwin_defer_intermediate_render=False,
-        robotwin_rt_spp=None,
-        robotwin_camera_shader=None,
         fast=False,
         ):
     if is_robotwin_runner(train_cfg):
@@ -293,10 +268,7 @@ def build_runner(
             episode_start=episode_start,
             deterministic_eval_seed=eval_seed,
             lean_observation=robotwin_lean_observation,
-            profile_eval=robotwin_profile,
             defer_intermediate_render=robotwin_defer_intermediate_render,
-            rt_samples_per_pixel=robotwin_rt_spp,
-            camera_shader=robotwin_camera_shader,
         )
 
     if is_adroit_runner(train_cfg):
@@ -619,11 +591,8 @@ def run_eval(
         eval_seed=None,
         episode_start=0,
         robotwin_lean_observation=False,
-        robotwin_profile=False,
         robotwin_defer_intermediate_render=False,
-        robotwin_rt_spp=None,
         fast=False,
-        robotwin_camera_shader=None,
         ):
     policy, train_cfg, resolved_policy_source, payload = load_policy(
         cfg, checkpoint_path, device, policy_source=policy_source,
@@ -696,10 +665,7 @@ def run_eval(
             eval_seed=eval_seed,
             episode_start=episode_start,
             robotwin_lean_observation=robotwin_lean_observation,
-            robotwin_profile=robotwin_profile,
             robotwin_defer_intermediate_render=robotwin_defer_intermediate_render,
-            robotwin_rt_spp=robotwin_rt_spp,
-            robotwin_camera_shader=robotwin_camera_shader,
             fast=fast,
         )
         print(f"[EVAL] running {task_name} ({eval_episodes} episodes)", flush=True)
@@ -836,14 +802,6 @@ def main():
         ),
     )
     parser.add_argument(
-        "--heatmap-intervention",
-        choices=["none", "uniform", "shuffle", "spatial_roll", "inverse"],
-        default=None,
-        help="Evaluation-only intervention applied to ACT's heatmap before attention.",
-    )
-    parser.add_argument("--heatmap-intervention-seed", type=int, default=260727)
-    parser.add_argument("--heatmap-intervention-roll", type=int, default=17)
-    parser.add_argument(
         "--eval-seed",
         type=int,
         default=None,
@@ -864,26 +822,9 @@ def main():
         help="Disable unused RoboTwin RGB extraction and wrist-camera capture; keep head-camera xyz+rgb point cloud.",
     )
     parser.add_argument(
-        "--robotwin-profile",
-        action="store_true",
-        help="Record RoboTwin action, rendering, camera, RGB, and point-cloud timing.",
-    )
-    parser.add_argument(
         "--robotwin-defer-intermediate-render",
         action="store_true",
         help="Skip renderer updates inside RoboTwin's 250Hz physics loop; render only when observations are requested.",
-    )
-    parser.add_argument(
-        "--robotwin-rt-spp",
-        type=int,
-        default=None,
-        help="Experimental ray-tracing samples per pixel; default RoboTwin protocol is 32.",
-    )
-    parser.add_argument(
-        "--robotwin-camera-shader",
-        choices=["rt", "default"],
-        default=None,
-        help="Experimental SAPIEN camera shader; formal RoboTwin protocol uses rt.",
     )
     parser.add_argument(
         "--results-dir",
@@ -902,11 +843,6 @@ def main():
     args = parser.parse_args()
 
     cfg = load_experiment_config(args.config)
-    if args.heatmap_intervention is not None:
-        with open_dict(cfg):
-            cfg.policy.act.heatmap_intervention = args.heatmap_intervention
-            cfg.policy.act.heatmap_intervention_seed = args.heatmap_intervention_seed
-            cfg.policy.act.heatmap_intervention_roll = args.heatmap_intervention_roll
     if args.results_dir:
         cfg.experiment.results_dir = str(resolve_repo_path(args.results_dir))
     results_dir = resolve_repo_path(cfg.experiment.results_dir)
@@ -937,13 +873,9 @@ def main():
     print(f"[EVAL] eval_episodes={eval_episodes}", flush=True)
     print(f"[EVAL] eval_seed={args.eval_seed}", flush=True)
     print(f"[EVAL] n_action_steps={args.n_action_steps or 'checkpoint-default'}", flush=True)
-    print(f"[EVAL] heatmap_intervention={args.heatmap_intervention or 'checkpoint-default'}", flush=True)
     print(f"[EVAL] episode_start={args.episode_start}", flush=True)
     print(f"[EVAL] robotwin_lean_observation={args.robotwin_lean_observation}", flush=True)
-    print(f"[EVAL] robotwin_profile={args.robotwin_profile}", flush=True)
     print(f"[EVAL] robotwin_defer_intermediate_render={args.robotwin_defer_intermediate_render}", flush=True)
-    print(f"[EVAL] robotwin_rt_spp={args.robotwin_rt_spp or 32}", flush=True)
-    print(f"[EVAL] robotwin_camera_shader={args.robotwin_camera_shader or 'rt'}", flush=True)
     print(f"[EVAL] tasks={tasks}", flush=True)
     if args.dry_run:
         return
@@ -973,10 +905,7 @@ def main():
         eval_seed=args.eval_seed,
         episode_start=args.episode_start,
         robotwin_lean_observation=args.robotwin_lean_observation,
-        robotwin_profile=args.robotwin_profile,
         robotwin_defer_intermediate_render=args.robotwin_defer_intermediate_render,
-        robotwin_rt_spp=args.robotwin_rt_spp,
-        robotwin_camera_shader=args.robotwin_camera_shader,
         fast=args.fast,
     )
     result["experiment"] = OmegaConf.to_container(cfg.experiment, resolve=True)
@@ -984,15 +913,9 @@ def main():
     result["eval_episodes"] = eval_episodes
     result["eval_seed"] = args.eval_seed
     result["n_action_steps_override"] = args.n_action_steps
-    result["heatmap_intervention"] = args.heatmap_intervention or "checkpoint-default"
-    result["heatmap_intervention_seed"] = args.heatmap_intervention_seed
-    result["heatmap_intervention_roll"] = args.heatmap_intervention_roll
     result["episode_start"] = args.episode_start
     result["robotwin_lean_observation"] = args.robotwin_lean_observation
-    result["robotwin_profile"] = args.robotwin_profile
     result["robotwin_defer_intermediate_render"] = args.robotwin_defer_intermediate_render
-    result["robotwin_rt_spp"] = args.robotwin_rt_spp or 32
-    result["robotwin_camera_shader"] = args.robotwin_camera_shader or "rt"
     solver = result.get("flow_solver", args.flow_solver or "euler")
 
     suffix = f"{checkpoint_path.stem}-{result['policy_source']}"

@@ -6,12 +6,16 @@ from termcolor import cprint
 from omegaconf import OmegaConf
 
 from r3d.env_runner.base_runner import BaseRunner
+from r3d.training.utils import is_main_process
 
 
 class WorkspaceEvaluationMixin:
     """Standalone checkpoint evaluation helpers for the training workspace."""
 
     def eval(self):
+        if not is_main_process():
+            return None
+
         cfg = copy.deepcopy(self.cfg)
 
         wandb_run = None
@@ -124,7 +128,7 @@ class WorkspaceEvaluationMixin:
             wandb_run.finish()
             cprint("\nWandB run finished", "green")
 
-    def get_policy(self, cfg, checkpoint_num=3000):
+    def get_policy(self, checkpoint_num=3000):
         cfg = copy.deepcopy(self.cfg)
         checkpoint_path = self.get_checkpoint_path(tag=str(checkpoint_num))
         assert checkpoint_path.is_file(), f"ckpt file doesn't exist, {checkpoint_path}"

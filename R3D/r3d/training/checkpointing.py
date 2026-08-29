@@ -1,5 +1,4 @@
 import copy
-import os
 import pathlib
 import threading
 
@@ -87,24 +86,30 @@ class CheckpointMixin:
         return str(path.absolute())
 
     def get_checkpoint_path(self, tag="latest"):
-        if tag:
-            return pathlib.Path(self.output_dir).joinpath(
-                "checkpoints", f"{tag}.ckpt"
-            )
         if tag == "best":
             checkpoint_dir = pathlib.Path(self.output_dir).joinpath("checkpoints")
             best_ckpt = None
             best_score = -1e10
-            for ckpt in os.listdir(checkpoint_dir):
-                if "latest" in ckpt:
+            for ckpt in checkpoint_dir.glob("*test_mean_score=*.ckpt"):
+                try:
+                    score = float(
+                        ckpt.name.split("test_mean_score=", maxsplit=1)[1]
+                        .rsplit(".ckpt", maxsplit=1)[0]
+                    )
+                except (IndexError, ValueError):
                     continue
-                score = float(
-                    ckpt.split("test_mean_score=")[1].split(".ckpt")[0]
-                )
                 if score > best_score:
                     best_ckpt = ckpt
                     best_score = score
-            return checkpoint_dir.joinpath(best_ckpt)
+            if best_ckpt is None:
+                raise FileNotFoundError(
+                    f"No scored checkpoints found in {checkpoint_dir}"
+                )
+            return best_ckpt
+        if tag:
+            return pathlib.Path(self.output_dir).joinpath(
+                "checkpoints", f"{tag}.ckpt"
+            )
         raise NotImplementedError(f"tag {tag} not implemented")
 
     def load_payload(self, payload, exclude_keys=None, include_keys=None, **kwargs):

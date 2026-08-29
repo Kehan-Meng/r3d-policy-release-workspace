@@ -10,8 +10,6 @@ import torch
 import tqdm
 import os
 import random
-import time
-import hashlib
 from pathlib import Path
 from datetime import datetime
 from termcolor import cprint
@@ -59,10 +57,7 @@ class RoboTwin2Runner(BaseRunner):
         episode_start: int = 0,
         deterministic_eval_seed=None,
         lean_observation: bool = False,
-        profile_eval: bool = False,
         defer_intermediate_render: bool = False,
-        rt_samples_per_pixel: int = None,
-        camera_shader: str = None,
         **kwargs
     ):
         super().__init__(output_dir)
@@ -86,10 +81,7 @@ class RoboTwin2Runner(BaseRunner):
         self.episode_start = int(episode_start)
         self.deterministic_eval_seed = deterministic_eval_seed
         self.lean_observation = bool(lean_observation)
-        self.profile_eval = bool(profile_eval)
         self.defer_intermediate_render = bool(defer_intermediate_render)
-        self.rt_samples_per_pixel = rt_samples_per_pixel
-        self.camera_shader = camera_shader
         if self.episode_start < 0:
             raise ValueError("episode_start must be non-negative")
         if self.lean_observation and self.save_video:
@@ -148,142 +140,6 @@ class RoboTwin2Runner(BaseRunner):
             ])
         return observation['joint_action']['vector']
 
-    def _episode_task_metadata(self, task_name):
-        """Return lightweight task metadata needed for per-condition metrics."""
-        task = getattr(self.env_manager, "task", None)
-        if task_name == "place_shoe":
-            shoe = getattr(task, "shoe", None)
-            if shoe is None:
-                return {}
-            initial_x = float(shoe.get_pose().p[0])
-            return {
-                "initial_shoe_x": initial_x,
-                "arm_routing": "left" if initial_x < 0 else "right",
-            }
-
-        if task_name == "move_playingcard_away":
-            playingcards = getattr(task, "playingcards", None)
-            if playingcards is None:
-                return {}
-
-            initial_x = float(playingcards.get_pose().p[0])
-            return {
-                "initial_playingcard_x": initial_x,
-                "playingcard_side": "right" if initial_x > 0 else "left",
-            }
-
-        return {}
-
-    def _init_move_card_phase_tracker(self, task_name):
-        if task_name != "move_playingcard_away":
-            return None
-
-        task = getattr(self.env_manager, "task", None)
-        playingcards = getattr(task, "playingcards", None)
-        if task is None or playingcards is None:
-            return None
-
-        initial_position = np.array(playingcards.get_pose().p, dtype=np.float64, copy=True)
-        expected_side = "right" if initial_position[0] > 0 else "left"
-        return {
-            "expected_side": expected_side,
-            "initial_position": initial_position,
-            "first_closed_side": None,
-            "min_left_tcp_distance": float("inf"),
-            "min_right_tcp_distance": float("inf"),
-            "saw_card_gripper_contact": False,
-            "transport_while_expected_closed": False,
-            "max_correct_direction_displacement": 0.0,
-            "released_after_correct_move": False,
-        }
-
-    def _update_move_card_phase_tracker(self, tracker):
-        """Track observable MoveCard behavior without changing environment state."""
-        if tracker is None:
-            return
-
-        task = self.env_manager.task
-        robot = task.robot
-        card_position = np.asarray(task.playingcards.get_pose().p, dtype=np.float64)
-        left_tcp = np.asarray(robot.get_left_tcp_pose()[:3], dtype=np.float64)
-        right_tcp = np.asarray(robot.get_right_tcp_pose()[:3], dtype=np.float64)
-        tracker["min_left_tcp_distance"] = min(
-            tracker["min_left_tcp_distance"], float(np.linalg.norm(left_tcp - card_position))
-        )
-        tracker["min_right_tcp_distance"] = min(
-            tracker["min_right_tcp_distance"], float(np.linalg.norm(right_tcp - card_position))
-        )
-
-        left_closed = robot.is_left_gripper_close()
-        right_closed = robot.is_right_gripper_close()
-        if tracker["first_closed_side"] is None:
-            if left_closed and not right_closed:
-                tracker["first_closed_side"] = "left"
-            elif right_closed and not left_closed:
-                tracker["first_closed_side"] = "right"
-            elif left_closed and right_closed:
-                tracker["first_closed_side"] = "both"
-
-        contact_positions = task.get_gripper_actor_contact_position("081_playingcards")
-        tracker["saw_card_gripper_contact"] |= len(contact_positions) > 0
-
-        direction = 1.0 if tracker["expected_side"] == "right" else -1.0
-        directed_displacement = direction * (card_position[0] - tracker["initial_position"][0])
-        tracker["max_correct_direction_displacement"] = max(
-            tracker["max_correct_direction_displacement"], float(directed_displacement)
-        )
-
-        expected_closed = right_closed if tracker["expected_side"] == "right" else left_closed
-        if (
-            tracker["saw_card_gripper_contact"]
-            and expected_closed
-            and directed_displacement > 0.02
-        ):
-            tracker["transport_while_expected_closed"] = True
-
-        if (
-            directed_displacement > 0.05
-            and robot.is_left_gripper_open()
-            and robot.is_right_gripper_open()
-        ):
-            tracker["released_after_correct_move"] = True
-
-    @staticmethod
-    def _finalize_move_card_phase_tracker(tracker):
-        if tracker is None:
-            return {}
-
-        expected_side = tracker["expected_side"]
-        selected_side = tracker["first_closed_side"]
-        correct_hand_choice = selected_side == expected_side
-        lateral_direction_correct = tracker["max_correct_direction_displacement"] > 0.05
-        release_success = tracker["released_after_correct_move"]
-
-        if not correct_hand_choice:
-            failure_stage = "wrong_hand_or_no_close"
-        elif not tracker["saw_card_gripper_contact"]:
-            failure_stage = "contact_failure"
-        elif not tracker["transport_while_expected_closed"]:
-            failure_stage = "grasp_or_transport_failure"
-        elif not lateral_direction_correct:
-            failure_stage = "lateral_direction_failure"
-        elif not release_success:
-            failure_stage = "release_failure"
-        else:
-            failure_stage = "completed_behavior_chain"
-
-        return {
-            "expected_hand": expected_side,
-            "selected_hand": selected_side or "none",
-            "correct_hand_choice": correct_hand_choice,
-            "card_gripper_contact": tracker["saw_card_gripper_contact"],
-            "grasp_or_transport_success": tracker["transport_while_expected_closed"],
-            "lateral_direction_correct": lateral_direction_correct,
-            "release_success": release_success,
-            "max_correct_direction_displacement": tracker["max_correct_direction_displacement"],
-            "failure_stage": failure_stage,
-        }
-
     def _run_single_task(self, policy: BasePolicy, epoch, task_name, task_config, task_idx=None, num_tasks=None):
         _orig_cwd = os.getcwd()
         os.chdir(self._ROBOTWIN2_DIR)
@@ -313,11 +169,8 @@ class RoboTwin2Runner(BaseRunner):
                     f"but only received {len(seed_list)} episodes"
                 )
             self.env_manager.configure_eval_observation(
-                profile=self.profile_eval,
                 lean=self.lean_observation,
                 defer_intermediate_render=self.defer_intermediate_render,
-                rt_samples_per_pixel=self.rt_samples_per_pixel,
-                camera_shader=self.camera_shader,
             )
             cprint(f"Found {len(seed_list)} valid task seeds: {seed_list}", "green")
 
@@ -325,9 +178,6 @@ class RoboTwin2Runner(BaseRunner):
             all_episode_rewards = []
             episode_details = []
             episode_errors = []
-            profile_episode_init_sec = 0.0
-            observation_probes = []
-            action_probes = []
             run_dir = os.path.basename(self.output_dir)
 
             for i, (episode_seed, task_id, episode_info_list) in enumerate(
@@ -348,7 +198,6 @@ class RoboTwin2Runner(BaseRunner):
                         torch.manual_seed(per_episode_seed)
                         if torch.cuda.is_available():
                             torch.cuda.manual_seed_all(per_episode_seed)
-                    init_start = time.perf_counter()
                     self.env_manager.Init_task_env(
                         episode_seed,
                         task_id,
@@ -358,14 +207,10 @@ class RoboTwin2Runner(BaseRunner):
                         task_config,
                         save_video=self.save_video,
                     )
-                    profile_episode_init_sec += time.perf_counter() - init_start
                     self.env_manager.apply_eval_observation_flags()
-                    episode_metadata = self._episode_task_metadata(task_name)
-                    phase_tracker = self._init_move_card_phase_tracker(task_name)
                     policy.reset()
 
                     done = False
-                    first_action_recorded = False
                     episode_reward = 0
                     episode_length = 0
                     controller_failure_count = 0
@@ -373,17 +218,6 @@ class RoboTwin2Runner(BaseRunner):
                     obs_history = deque(maxlen=self.n_obs_steps)
 
                     observation = self.env_manager.get_observation()
-                    if self.profile_eval:
-                        pointcloud = np.ascontiguousarray(observation['pointcloud'])
-                        observation_probes.append({
-                            'episode': global_episode,
-                            'pointcloud_shape': list(pointcloud.shape),
-                            'pointcloud_mean': float(pointcloud.mean()),
-                            'pointcloud_std': float(pointcloud.std()),
-                            'pointcloud_sha256': hashlib.sha256(pointcloud.tobytes()).hexdigest(),
-                            'xyz_sha256': hashlib.sha256(np.ascontiguousarray(pointcloud[:, :3]).tobytes()).hexdigest(),
-                            'rgb_sha256': hashlib.sha256(np.ascontiguousarray(pointcloud[:, 3:]).tobytes()).hexdigest(),
-                        })
                     agent_pos_vector = self._agent_pos_from_observation(observation)
                     current_obs = {
                         'point_cloud': torch.from_numpy(observation['pointcloud']),
@@ -412,14 +246,6 @@ class RoboTwin2Runner(BaseRunner):
                         action_chunk = action_dict.get(
                             'action_env', action_dict['action']
                         ).squeeze(0).detach().cpu().numpy()
-                        if self.profile_eval and not first_action_recorded:
-                            action_array = np.ascontiguousarray(action_chunk)
-                            action_probes.append({
-                                'episode': global_episode,
-                                'action_shape': list(action_array.shape),
-                                'action_sha256': hashlib.sha256(action_array.tobytes()).hexdigest(),
-                            })
-                            first_action_recorded = True
                         action_type = 'ee' if self.action_space_type == 'ee' else 'qpos'
                         use_ee_space = self.action_space_type == 'ee'
 
@@ -431,7 +257,6 @@ class RoboTwin2Runner(BaseRunner):
                             use_ee_space=use_ee_space,
                         )
                         obs_history = self._ensure_history_task_onehot(obs_history, task_idx, num_tasks)
-                        self._update_move_card_phase_tracker(phase_tracker)
 
                         episode_length += self.env_manager.get_last_action_step_count()
                         controller_execution = self.env_manager.get_last_controller_execution()
@@ -456,7 +281,6 @@ class RoboTwin2Runner(BaseRunner):
 
                     all_success.append(success)
                     all_episode_rewards.append(episode_reward)
-                    phase_metadata = self._finalize_move_card_phase_tracker(phase_tracker)
                     controller_metadata = {}
                     if self.action_space_type == 'ee':
                         controller_metadata = {
@@ -469,8 +293,6 @@ class RoboTwin2Runner(BaseRunner):
                         'reward': episode_reward,
                         'length': episode_length,
                         'seed': episode_seed,
-                        **episode_metadata,
-                        **phase_metadata,
                         **controller_metadata,
                     })
 
@@ -513,75 +335,9 @@ class RoboTwin2Runner(BaseRunner):
                 "episode_count": len(episode_details),
                 "episode_details": episode_details,
             }
-            if self.profile_eval:
-                eval_profile = self.env_manager.get_eval_profile()
-                eval_profile["episode_init_sec"] = profile_episode_init_sec
-                eval_profile["observation_probes"] = observation_probes
-                eval_profile["action_probes"] = action_probes
-                log_data["eval_profile"] = eval_profile
             if episode_errors:
                 log_data[f"{log_prefix}: runner_error_count"] = len(episode_errors)
                 log_data[f"{log_prefix}: first_runner_error"] = episode_errors[0]
-            if task_name == "move_playingcard_away":
-                metric_names = (
-                    "correct_hand_choice",
-                    "card_gripper_contact",
-                    "grasp_or_transport_success",
-                    "lateral_direction_correct",
-                    "release_success",
-                )
-                for metric_name in metric_names:
-                    metric_values = [
-                        detail[metric_name] for detail in episode_details
-                        if metric_name in detail
-                    ]
-                    if metric_values:
-                        log_data[f"{log_prefix}: {metric_name}_rate"] = float(np.mean(metric_values))
-                for side in ("left", "right"):
-                    side_details = [
-                        detail for detail in episode_details
-                        if detail.get("playingcard_side") == side
-                    ]
-                    if side_details:
-                        side_success_rate = float(np.mean([
-                            detail["success"] for detail in side_details
-                        ]))
-                        log_data[f"{log_prefix}: {side}_episodes"] = len(side_details)
-                        log_data[f"{log_prefix}: {side}_success_rate"] = side_success_rate
-                        for metric_name in metric_names:
-                            metric_values = [
-                                detail[metric_name] for detail in side_details
-                                if metric_name in detail
-                            ]
-                            if metric_values:
-                                log_data[
-                                    f"{log_prefix}: {side}_{metric_name}_rate"
-                                ] = float(np.mean(metric_values))
-                        for failure_stage in (
-                            "wrong_hand_or_no_close",
-                            "contact_failure",
-                            "grasp_or_transport_failure",
-                            "lateral_direction_failure",
-                            "release_failure",
-                        ):
-                            log_data[
-                                f"{log_prefix}: {side}_{failure_stage}_count"
-                            ] = sum(
-                                detail.get("failure_stage") == failure_stage
-                                for detail in side_details
-                            )
-
-            if task_name == "place_shoe":
-                for side in ("left", "right"):
-                    side_details = [
-                        detail for detail in episode_details
-                        if detail.get("arm_routing") == side
-                    ]
-                    if side_details:
-                        log_data[f"{log_prefix}: {side}_episodes"] = len(side_details)
-                        log_data[f"{log_prefix}: {side}_success_rate"] = float(
-                            np.mean([detail["success"] for detail in side_details])
-                        )
 
             cprint("\n" + "="*60, "cyan")
             cprint(f"RoboTwin 2.0 Evaluation Summary - {task_name}", "cyan")

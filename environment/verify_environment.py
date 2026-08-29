@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import importlib.metadata
 import importlib.util
 import os
@@ -57,6 +58,21 @@ def check_modules(modules):
     return missing
 
 
+def check_local_package(module_name: str, expected_root: pathlib.Path):
+    module = importlib.import_module(module_name)
+    module_file = pathlib.Path(module.__file__).resolve()
+    try:
+        module_file.relative_to(expected_root.resolve())
+    except ValueError:
+        print(
+            f"WRONG   {module_name:20s} {module_file} "
+            f"(expected under {expected_root.resolve()})"
+        )
+        return [f"{module_name} resolves outside this checkout"]
+    print(f"OK      {module_name + ' source':20s} {module_file}")
+    return []
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -71,7 +87,13 @@ def main():
     print("\nCore dependencies")
     missing = check_modules(CORE_MODULES)
 
-    clip_dir = pathlib.Path(__file__).resolve().parents[1] / "pretrained" / "clip-vit-base-patch32"
+    repository_root = pathlib.Path(__file__).resolve().parents[1]
+    if "r3d" not in missing:
+        missing.extend(check_local_package("r3d", repository_root / "R3D"))
+    if "pc_sam" not in missing:
+        missing.extend(check_local_package("pc_sam", repository_root / "PointSAM"))
+
+    clip_dir = repository_root / "pretrained" / "clip-vit-base-patch32"
     clip_ready = (clip_dir / "config.json").is_file()
     print(f"{'OK' if clip_ready else 'MISSING':7s} {'policy CLIP snapshot':20s} {clip_dir}")
     if not clip_ready:

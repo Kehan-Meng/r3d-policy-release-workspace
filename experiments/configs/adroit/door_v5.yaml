@@ -1,7 +1,7 @@
 experiment:
-  name: adroit_door_v5_masked_cosine
-  output_dir: outputs/adroit_door_v5_masked_cosine
-  results_dir: experiments/results/adroit_door_v5_masked_cosine
+  name: adroit_door_v5
+  output_dir: outputs/adroit_door_v5
+  results_dir: experiments/results/adroit_door_v5
 runtime:
   gpu_id: 0
 sequence:
@@ -40,18 +40,12 @@ policy:
     consistency_ramp_start_epoch: 200
     consistency_ramp_end_epoch: 1400
     consistency_schedule_power: 0.5
-    couple_alpha_to_consistency: false
-    alpha_to_consistency_ratio: 1.0e-05
   act:
     num_queries: 16
     num_heads: 8
     heatmap_mode: multiply
-    use_pseudo_heatmap: false
     drop_cls_token: false
     heatmap_gamma: 1.0
-    competitive_cross1: false
-    competitive_cross2: true
-    competitive_temperature: 1.5
   pointcloud_encoder:
     embed_dim: 256
     out_dim: 256
@@ -68,24 +62,6 @@ policy:
     feature_mode: pointsam
     bpe_path: PointSAM/resources/bpe_simple_vocab_16e6.txt.gz
     point_feature_projection: pretrained
-  use_act_text_align: true
-  act_text_align_config:
-    lambda_max: 0.001
-    warmup_steps: 1000
-    text_input_dim: 512
-    mask_ratio: 0.3
-    num_heads: 8
-    mlp_ratio: 4.0
-    diagnostic:
-      enabled: true
-      every_n_steps: 200
-      compute_zero_act: true
-      compute_shuffle_act: true
-  mq_diversity:
-    eps: 1.0e-6
-    raw:
-      enabled: true
-      weight: 0.01
 training:
   device: cuda:0
   seed: 0
@@ -123,7 +99,7 @@ eval:
   max_steps: 300
   fps: 10
 report:
-  variant: compmq01_tau15_rawdiv0p01_maskedcos_ata1e3
+  variant: baseline
   generation_type: flow_matching
   encoder: PointSAMTwoWayCAV4
   heatmap_mode: corrected_multiply
@@ -143,18 +119,5 @@ report:
   flow_consistency_schedule: geometric_sqrt
   flow_consistency_ramp_epochs: 200:1400
   encoder_training: freeze_uni3d_and_clip_train_adapters_projections_decoder
-  act_text_align: true
-  act_text_align_lambda_max: 0.001
-  instruction_aug: true
-  instruction_bank: instruction_bank_adroit_metaworld_affogato_v2
   point_feature_projection: pretrained
   heatmap_gamma: 1.0
-  ata_loss: masked_feature_cosine_reconstruction
-  ata_mask_ratio: 0.3
-  mq_diversity_branch: raw
-  mq_diversity_weight: 0.01
-instruction_aug:
-  enabled: true
-  bank_path: experiments/configs/base/instruction_bank_adroit_metaworld.json
-  apply_in_train: true
-  apply_in_val: false
