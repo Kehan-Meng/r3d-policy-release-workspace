@@ -46,6 +46,10 @@ bash environment/install.sh
 bash environment/install_benchmarks.sh all
 ```
 
+`environment/install.sh` installs both local packages, builds the CUDA
+extensions, downloads the released encoder and official policy CLIP snapshot,
+and verifies the resulting core environment.
+
 Benchmark runtimes are optional and checked explicitly, for example:
 
 ```bash
@@ -58,9 +62,11 @@ encoder is hosted at
 on ModelScope. Download and verify it with:
 
 ```bash
-pip install modelscope==1.39.1
 python download_pretrained.py
 ```
+
+This command is also safe to rerun independently: existing files are reused,
+and the encoder checkpoint is checked against the published SHA256.
 
 The script writes the checkpoint to
 `pretrained/twowayca-affordance/model.safetensors`, which is the relative path

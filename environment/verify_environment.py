@@ -93,8 +93,35 @@ def main():
     if "pc_sam" not in missing:
         missing.extend(check_local_package("pc_sam", repository_root / "PointSAM"))
 
+    encoder_checkpoint = (
+        repository_root
+        / "pretrained"
+        / "twowayca-affordance"
+        / "model.safetensors"
+    )
+    encoder_ready = encoder_checkpoint.is_file()
+    print(
+        f"{'OK' if encoder_ready else 'MISSING':7s} "
+        f"{'PointSAM checkpoint':20s} {encoder_checkpoint}"
+    )
+    if not encoder_ready:
+        missing.append("PointSAM checkpoint (run download_pretrained.py)")
+
     clip_dir = repository_root / "pretrained" / "clip-vit-base-patch32"
-    clip_ready = (clip_dir / "config.json").is_file()
+    clip_metadata = (
+        "config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json",
+        "merges.txt",
+    )
+    clip_ready = (
+        all((clip_dir / name).is_file() for name in clip_metadata)
+        and any(
+            (clip_dir / name).is_file()
+            for name in ("pytorch_model.bin", "model.safetensors")
+        )
+    )
     print(f"{'OK' if clip_ready else 'MISSING':7s} {'policy CLIP snapshot':20s} {clip_dir}")
     if not clip_ready:
         missing.append("policy CLIP snapshot (run download_pretrained.py)")

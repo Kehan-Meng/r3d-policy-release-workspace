@@ -15,6 +15,13 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent
 TARGET = REPO_ROOT / "pretrained" / "twowayca-affordance" / MODEL_FILE
 CLIP_MODEL_ID = "openai/clip-vit-base-patch32"
 CLIP_TARGET = REPO_ROOT / "pretrained" / "clip-vit-base-patch32"
+CLIP_REQUIRED_FILES = (
+    "config.json",
+    "tokenizer.json",
+    "tokenizer_config.json",
+    "vocab.json",
+    "merges.txt",
+)
 
 
 def sha256(path):
@@ -31,6 +38,15 @@ def verify(path):
         raise RuntimeError(
             f"Checkpoint SHA256 mismatch: expected {EXPECTED_SHA256}, got {actual}"
         )
+
+
+def clip_snapshot_ready(path):
+    metadata_ready = all((path / name).is_file() for name in CLIP_REQUIRED_FILES)
+    weights_ready = any(
+        (path / name).is_file()
+        for name in ("pytorch_model.bin", "model.safetensors")
+    )
+    return metadata_ready and weights_ready
 
 
 def main():
@@ -62,7 +78,7 @@ def main():
         verify(TARGET)
         print(f"[weights] downloaded and verified: {TARGET}")
 
-    if (CLIP_TARGET / "config.json").is_file():
+    if clip_snapshot_ready(CLIP_TARGET):
         print(f"[weights] ready: {CLIP_TARGET}")
         return
 
